@@ -5,11 +5,14 @@
 		<html>
 			<head>
 				<title>[[title]] - needleful dot net</title>
+				<header-defaults/>
 			</head>
 			<body>
 				<h1>My cool page: [[title]]</h1>
 				<div class='content'>
+					<p>Here it is:</p>
 					[[content]]
+					<p>Thanks, gamer.</p>
 				</div>
 			</body>
 		</html>

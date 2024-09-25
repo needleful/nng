@@ -39,6 +39,7 @@ h_read_template([], T, T).
 h_read_template([element(param, Attributes, PC)|Tail], template(TName, Params, Content), Template) :-
 	process_param(Attributes, PC, (PKey, PValue)),
 	put_assoc(PKey, Params, PValue, Params2),
+	writeln(template:TName),
 	h_read_template(Tail, template(TName, Params2, Content), Template).
 h_read_template([element(content, _, Content)|Tail], template(TName, P, []), Template) :-
 	h_read_template(Tail, template(TName, P, Content), Template).
@@ -86,9 +87,9 @@ process(Context, [element(Name, Attribs, Content)|XML], HTML, Result) :-
 		process(Context, template(Name, Attrib2, Content), [], NodeResult))
 	
 	;	(	process(Context, Content, [], SubResult),
-		NodeResult = element(Name, Attrib2, SubResult))),
+		NodeResult = [element(Name, Attrib2, SubResult)])),
 	!,
-	append(HTML, [NodeResult], HTML2),
+	append(HTML, NodeResult, HTML2),
 	process(Context, XML, HTML2, Result).
 
 process(Context, [Atom|XML], HTML, Result) :- atom(Atom),
@@ -110,7 +111,11 @@ process(_, processor(Other, _, _), element(unknown_processor, [name=Other], []))
 
 def_vars(C, [], C).
 def_vars(Context, [Key-Value|Tail], NewContext) :-
-	put_assoc(Key, Context, Value, Context2),
+	(Type, Data) = Value,
+	(	atom(Data), text_process(Context, Data, ParsedValue)
+	;	atomic(Data), ParsedValue=Data
+	;	process(Context, Data, [], ParsedValue)),
+	put_assoc(Key, Context, (Type, ParsedValue), Context2),
 	def_vars(Context2, Tail, NewContext).
 
 fill_params(Args, Params, Vars) :-
@@ -144,6 +149,10 @@ split(Text, Key, Before, After) :- atom(Text), atom(Key),
 	sub_atom(Text, 0, A, _, Before),
 	sub_atom(Text, _, B, 0, After).
 
+extract(Text, Before, Open, Match, Close, After) :- atom(Open), atom(Close),
+	split(Text, Open, Before, MatchPlus),
+	split(MatchPlus, Close, Match, After).
+
 xml_merge([], []).
 xml_merge([''], []).
 xml_merge([A], A).
@@ -157,9 +166,8 @@ xml_merge([A|Tail], Result) :-
 	;	Result=[A,Merged]).
 
 text_process(Context, Text, Result) :-
-	(	split(Text, '[[', BeforeMatch, MatchPlus),
-		split(MatchPlus, ']]', F, AfterMatch),
-		%writeln(formula(F->Text)),
+	(	extract(Text, BeforeMatch, '[[', F, ']]', AfterMatch),
+		%writeln(formula:F->text:Text),
 		!,
 		do_formula(Context, F, Replaced),
 		text_process(Context, AfterMatch, Processed),
