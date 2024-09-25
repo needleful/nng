@@ -1,0 +1,4 @@
+<template name='header-defaults'>
+	<link rel='stylesheet' href='/needleful.css'/>
+	<script type='text/javascript' src='/needleful.js'/>
+</template>
