@@ -1,0 +1,13 @@
+<template name='page' type='page'>
+	<param name='title' type='text'/>
+	<content>
+		<html>
+			<head>
+				<title>[[title]] - needleful dot net</title>
+			</head>
+		</html>
+		<body>
+			<h1>My cool page: [[title]]</h1>
+		</body>
+	</content>
+</template>
