@@ -1,0 +1,28 @@
+<templates>
+	<template name='header-defaults'>
+		<content>
+			<link rel='stylesheet' href='/needleful.css'/>
+			<script type='text/javascript' src='/needleful.js'/>
+		</content>
+	</template>
+	<template name='page'>
+		<param name='title' type='text'/>
+		<param name='content' type='xml'/>
+		<content>
+			<html>
+				<head>
+					<title>[[title]] - needleful dot net</title>
+					<header-defaults/>
+				</head>
+				<body>
+					<h1>My cool page: [[title]]</h1>
+					<div class='content'>
+						<p>Here it is:</p>
+						[[content]]
+						<p>Thanks, gamer.</p>
+					</div>
+				</body>
+			</html>
+		</content>
+	</template>
+</templates>

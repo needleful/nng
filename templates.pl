@@ -22,14 +22,14 @@ load_templates(SourceDir) :-
 
 process_templates([]).
 process_templates([A|T]) :- 
-	(	load_xml(A, XML, [space(remove)]),
+	(	load_xml(A, [XML], [space(remove)]),
 		read_template_xml(XML)
 	;	writeln('Failed to parse file':A)),
 	process_templates(T).
 
-read_template_xml([element(templates, _, Content)]) :- 
+read_template_xml(element(templates, _, Content)) :- 
 	maplist(read_template_xml, Content).
-read_template_xml([element(template, [name=TMPName], Content)]) :-
+read_template_xml(element(template, [name=TMPName], Content)) :-
 	\+ processor(TMPName),
 	empty_assoc(Params),
 	h_read_template(Content, template(TMPName, Params, []), Template),
