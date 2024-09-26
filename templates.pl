@@ -1,5 +1,4 @@
 :- module(templates, [
-	template/3,
 	load_templates/1,
 	process_file/2
 	]).
@@ -15,60 +14,67 @@
 :- dynamic(template/3).
 
 load_templates(SourceDir) :-
-	working_directory(CWD, SourceDir),
-	expand_file_name('*.template.xml', TFiles),
-	process_templates(TFiles),
-	working_directory(_, CWD).
+	retractall(template(_, _, _)),
+	atom_concat(SourceDir, '/*.template.xml', TSource),
+	expand_file_name(TSource, TFiles),
+	process_templates(TFiles).
 
 process_templates([]).
 process_templates([A|T]) :- 
 	(	load_xml(A, [XML], [space(remove)]),
 		read_template_xml(XML)
-	;	writeln('Failed to parse file':A)),
+	;	writeln('Failed to parse file':A), fail),
 	process_templates(T).
 
-read_template_xml(element(templates, _, Content)) :- 
+read_template_xml(element(templates, _, Content)) :- !,
 	maplist(read_template_xml, Content).
-read_template_xml(element(template, [name=TMPName], Content)) :-
-	\+ processor(TMPName),
+read_template_xml(element(template, [name=TempName], Content)) :- !,
+	\+ processor(TempName),
 	empty_assoc(Params),
-	h_read_template(Content, template(TMPName, Params, []), Template),
+	(	read_params(Content, template(TempName, Params, []), Template)
+	;	writeln('Failed to parse template':TempName), fail),
+	writeln(template:TempName),
 	assert(Template).
+read_template_xml(Other) :-
+	writeln('Invalid Template XML:'),
+	print_term(Other, [indent_arguments(3)]),
+	fail.
 
-h_read_template([], T, T).
-h_read_template([element(param, Attributes, PC)|Tail], template(TName, Params, Content), Template) :-
+read_params([], T, T).
+read_params([element(param, Attributes, PC)|Tail], template(TName, Params, Content), Template) :-
 	process_param(Attributes, PC, (PKey, PValue)),
 	put_assoc(PKey, Params, PValue, Params2),
-	writeln(template:TName),
-	h_read_template(Tail, template(TName, Params2, Content), Template).
-h_read_template([element(content, _, Content)|Tail], template(TName, P, []), Template) :-
-	h_read_template(Tail, template(TName, P, Content), Template).
+	read_params(Tail, template(TName, Params2, Content), Template).
+read_params([element(content, _, Content)|Tail], template(TName, P, []), Template) :-
+	read_params(Tail, template(TName, P, Content), Template).
 
 process_param(Attributes, Content, Param) :-
-	h_process_param_attr(Attributes, ('', ('', true)), P),
-	valid_param(P),
-	(Name, (Type, Req)) = P,
-	(	(	Type = list,
-			Content = [element(param, Atr2, C2)],
-			process_param(Atr2, C2, P2),
-			Type2 = list(P2),
-			Param = (Name, (Type2, Req)))
-		;	(	Content = [],
-				Param = P)).
+	h_process_param_attr(Attributes, ('', '', true), P),
+	(	valid_param(P),
+		process_param_type(P, Content, Param)
+	;	writeln('Invalid parameter':P), fail).
 
 h_process_param_attr([], P, P).
-h_process_param_attr([name=N|List], ('', (T, R)), Param) :- 
-	h_process_param_attr(List, (N, (T, R)), Param).
-h_process_param_attr([type=T|List], (N, ('', R)), Param) :-
-	h_process_param_attr(List, (N, (T, R)), Param).
-h_process_param_attr([required=R|List], (N, (T, true)), Param) :-
-	h_process_param_attr(List, (N, (T, R)), Param).
+h_process_param_attr([name=Name|List], ('', T, R), Param) :- 
+	h_process_param_attr(List, (Name, T, R), Param).
+h_process_param_attr([type=Type|List], (N, '', R), Param) :-
+	h_process_param_attr(List, (N, Type, R), Param).
+h_process_param_attr([required=Required|List], (N, T, true), Param) :-
+	h_process_param_attr(List, (N, T, Required), Param).
 
-valid_param((_, (PT, PR))) :-
-	member(PT, [integer, float, text, xml, file, list, markdown]),
-	member(PR, [true, false]).
+valid_param((_, Type, Required)) :-
+	member(Type, [date, file, float, integer, list, markdown, struct, text, xml]),
+	member(Required, [false, true]).
 
-:- dynamic(text_formula/3).
+process_param_type((N, list, R), [element(param, SubAttr, SubContent)], (N, list(SubParam), R)) :- !,
+	process_param(SubAttr, SubContent, SubParam).
+process_param_type((N, struct, R), FieldList, (N, struct(Fields), R)) :- !,
+	maplist(process_param_struct_field, FieldList, FieldParams),
+	list_to_assoc(FieldParams, Fields).
+process_param_type(P, _, P).
+
+process_param_struct_field(element(param, Attributes, Content), Name-(Type,Required)) :-
+	process_param(Attributes, Content, (Name, Type, Required)).
 
 processor(match).
 processor(foreach).
@@ -80,43 +86,35 @@ process_file(SourceXml, OutHtml) :-
 process(_, [], HTML, HTML).
 process(Context, [element(Name, Attribs, Content)|XML], HTML, Result) :-
 	attrib_process(Context, Attribs, Attrib2),
-	(	(	processor(Name), !,
-		process(Context, processor(Name, Attrib2, Content), [], NodeResult))
-	
-	;	(	template(Name, _, _), !,
-		process(Context, template(Name, Attrib2, Content), [], NodeResult))
-	
-	;	(	process(Context, Content, [], SubResult),
-		NodeResult = [element(Name, Attrib2, SubResult)])),
+	(	processor(Name), !,
+		process(Context, processor(Name, Attrib2, Content), [], NodeResult)
+	;	template(Name, _, _), !,
+		process(Context, template(Name, Attrib2, Content), [], NodeResult)
+	;	(	process(Context, Content, [], SubResult), !,
+			NodeResult = [element(Name, Attrib2, SubResult)]
+		;	!, writeln('Processing element failed':(Name, Attrib2)), fail)),
 	!,
 	append(HTML, NodeResult, HTML2),
 	process(Context, XML, HTML2, Result).
-
 process(Context, [Atom|XML], HTML, Result) :- atom(Atom),
-	text_process(Context, Atom, A2),
+	(	text_process(Context, Atom, A2)
+	;	!, writeln('Text replacement failed':Atom)),
 	(	A2=[_|_], ANext = A2
-	;	Result=[A2]),
+	;	atomic(A2), Result=[A2]
+	;	!, writeln('Invalid text':A2), fail),
 	append(HTML, ANext, HTML2),
 	!,
 	process(Context, XML, HTML2, Result).
-
 process(Context, template(Template, _, Args), HTML, Result) :-
 	template(Template, Params, TemplateContent),
 	!,
 	fill_params(Args, Params, Vars),
 	assoc_to_list(Vars, VarList),
-	def_vars(Context, VarList, LocalContext),
-	process(LocalContext, TemplateContent, HTML, Result).
-process(_, processor(Other, _, _), element(unknown_processor, [name=Other], [])).
-
-def_vars(C, [], C).
-def_vars(Context, [Key-Value|Tail], NewContext) :-
-	(Type, Data) = Value,
-	(	atom(Data), text_process(Context, Data, ParsedValue)
-	;	atomic(Data), ParsedValue=Data
-	;	process(Context, Data, [], ParsedValue)),
-	put_assoc(Key, Context, (Type, ParsedValue), Context2),
-	def_vars(Context2, Tail, NewContext).
+	(	def_vars(Context, VarList, LocalContext)
+	;	!, writeln('Problem defining variables'), fail),
+	(	process(LocalContext, TemplateContent, HTML, Result)
+	;	!, writeln('Processing template failed':Template), fail).
+process(_, processor(Other, Attr, Content), element('unknown-processor', [name=Other|Attr], Content)).
 
 fill_params(Args, Params, Vars) :-
 	empty_assoc(EmptyVars),
@@ -127,21 +125,62 @@ fill_param_h([], Params, Vars1, Vars1) :-
 	optional_params(ParamList).
 fill_param_h([element(Name, _, Value)|Tail], Params, Vars1, VarsN) :-
 	del_assoc(Name, Params, (PType, _), Params2),
-	parse_arg(PType, Value, ParsedValue),
+	parse_arg(PType, Value, ParsedValue), !,
 	put_assoc(Name, Vars1, (PType, ParsedValue), Vars2),
 	fill_param_h(Tail, Params2, Vars2, VarsN).
 
-parse_arg(xml, X, X).
-parse_arg(markdown, M, M).
-parse_arg(integer, [I], Int) :- atom_number(I, Int), integer(Int).
-parse_arg(float, [F], Float) :- atom_number(F, Float).
-parse_arg(file, [F], F) :- atom(F).
-parse_arg(text, [T], T) :- atom(T).
+parse_arg(xml, X, X) :- !.
+parse_arg(markdown, M, M) :- !.
+parse_arg(integer, [I], Int) :- atom_number(I, Int), integer(Int), !.
+parse_arg(float, [F], Float) :- atom_number(F, Float), !.
+parse_arg(file, [F], F) :- atom(F), !.
+parse_arg(text, [T], T) :- atom(T), !.
+parse_arg(list(SubField), Args, Values) :- maplist(parse_list_arg(SubField), Args, Values), !. 
 % TODO: parse_arg for lists
-parse_arg(_, _, _).
+parse_arg(Type, Value, _) :- writeln('Could not process var':Type=Value), !, fail.
+
+parse_list_arg((_, Type, _), element(_, _, A), V) :- parse_arg(Type, A, V).
+
+def_vars(C, [], C).
+def_vars(Context, [Key-Value|Tail], NewContext) :-
+	(Type, Data) = Value,
+	(	def_var_h(Context, Type, Data, ParsedData),
+		put_assoc(Key, Context, (Type, ParsedData), Context2)
+	;	writeln('Problem defining variable':(Key:Type)=Data), fail),
+	!, def_vars(Context2, Tail, NewContext).
+
+def_var_h(Context, _, Data, ParsedData) :- atom(Data),
+	text_process(Context, Data, ParsedData).
+def_var_h(_, _, Data, Data) :- atomic(Data).
+def_var_h(Context, list((_, SubType, _)), Data, ParsedData) :-
+	maplist(def_var_h(Context, SubType), Data, ParsedData).
+def_var_h(Context, Type, Data, ParsedData) :- (Type=xml;Type=markdown),
+	process(Context, Data, [], ParsedData).
+def_var_h(_, Type, Data, _) :- writeln('Could not parse':(Type, Data)), fail.
 
 optional_params([]).
 optional_params([_-(_, false)|Tail]) :- optional_params(Tail).
+
+attrib_process(Context, Attrib, Result) :-
+	h_attrib_process(Context, Attrib, [], Result).
+h_attrib_process(_, [], R, R).
+h_attrib_process(C, [A=V|Tail], Tail2, Result) :-
+	text_process(C, A, A2), atom(A2),
+	text_process(C, V, V2), atom(V2),
+	h_attrib_process(C, Tail, [A2=V2|Tail2], Result).
+
+text_process(Context, Text, Result) :-
+	(	extract(Text, BeforeMatch, '[[', F, ']]', AfterMatch),
+		%writeln(formula:F->text:Text),
+		!,
+		do_formula(Context, F, Replaced),
+		text_process(Context, AfterMatch, Processed),
+		xml_merge([BeforeMatch, Replaced, Processed], Result))
+	;	Result = Text.
+
+do_formula(_, N, N) :- number(N).
+do_formula(Context, F, Result) :- atom(F),
+	get_assoc(F, Context, (_, Result)).
 
 split(Text, Key, Before, After) :- atom(Text), atom(Key),
 	sub_atom(Text, A, _, B, Key),
@@ -164,28 +203,3 @@ xml_merge([A|Tail], Result) :-
 	(	Merged=[], Result=A
 	;	Merged=[_|_], Result=[A|Merged]
 	;	Result=[A,Merged]).
-
-text_process(Context, Text, Result) :-
-	(	extract(Text, BeforeMatch, '[[', F, ']]', AfterMatch),
-		%writeln(formula:F->text:Text),
-		!,
-		do_formula(Context, F, Replaced),
-		text_process(Context, AfterMatch, Processed),
-		xml_merge([BeforeMatch, Replaced, Processed], Result))
-	;	Result = Text.
-
-do_formula(_, N, N) :- number(N).
-do_formula(Context, F, Result) :- atom(F),
-	get_assoc(F, Context, (_, Result)).
-
-attrib_process(Context, Attrib, Result) :-
-	h_attrib_process(Context, Attrib, [], Result).
-h_attrib_process(_, [], R, R).
-h_attrib_process(C, [A=V|Tail], Tail2, Result) :-
-	text_process(C, A, A2),
-	text_process(C, V, V2),
-	(	(	atom(A2), ANew = A2)
-		;	atomic_list_concat(A2, '', ANew)),
-	(	(	atom(V2), VNew = V2)
-		;	atomic_list_concat(V2, '', VNew)),
-	h_attrib_process(C, Tail, [ANew=VNew|Tail2], Result).

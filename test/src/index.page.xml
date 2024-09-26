@@ -1,5 +1,9 @@
 <page>
-	<title>Gamer</title>
+	<title>Hello World</title>
+	<custom-nav-list>
+		<link>hello</link>
+		<link>world</link>
+	</custom-nav-list>
 	<content>
 		<p>Hello, world!</p>
 	</content>
