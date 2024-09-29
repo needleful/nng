@@ -28,9 +28,15 @@ m3
 		- struct fields
 			p0
 			i9
+			x
 	- Types
 		p0
 		i10
+		x
 		- Structs
 			p0
 			i12
+			x
+	- Default arguments
+		p0
+		i13

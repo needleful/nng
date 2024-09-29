@@ -1,6 +1,18 @@
 <templates>
+	<template name='nn-header'>
+		<param name='title' type='text'/>
+		<content>
+			<head>
+				<title>[[title]]</title>
+				<link rel='stylesheet' href='/needleful.css'/>
+				<script type='text/javascript' src='/needleful.js'/>
+			</head>
+		</content>
+	</template>
 	<template name='page'>
 		<param name='title' type='text'/>
+		<param name='content' type='xml'/>
+		<param name='contentClass' type='text' required='false'/>
 		<param name='nav' type='list' required='false'>
 			<param name='el' type='struct'>
 				<param name='link' type='text'/>
@@ -9,13 +21,30 @@
 		</param>
 		<content>
 			<html>
-				<h1>[[title]]</h1>
-				<ul>
-					<foreach list='nav'>
-						<li><a href="[[el:link]]">[[el:title]]</a>/</li>
-					</foreach>
-					<li>[[title]]</li>
-				</ul>
+				<nn-header>
+					<title>[[title]] - Needleful.net</title>
+				</nn-header>
+				<body>
+					<div id='content' class='[[contentClass]]'>
+						<div id='titlebar'>
+							<ul class='navbar'>
+								<li><a href="/">needleful dot net</a> / </li>
+								<foreach list='nav'>
+									<li><a href="[[el:link]]">[[el:title]]</a> / </li>
+								</foreach>
+								<li>[[title]]</li>
+							</ul>
+							<button id='burger-button' class='not-clicked' aria-label='burger button' onclick='burgerClicked()'>
+								<img id='burger-img' alt='burger button' src='/burger.svg'/>
+							</button>
+							<div id='burger-block' class='noshow'>
+								<img class='full-line' style='min-width: 400px;' src='/img/burger.jpg'/>
+								<p class='epic full-line'>Burger.</p>
+							</div>
+						</div>
+						[[content]]
+					</div>
+				</body>
 			</html>
 		</content>
 	</template>

@@ -15,18 +15,32 @@
 %	struct(SubFields), where Subfields is the same association as Parameters
 :- dynamic(template/3).
 
+% Processors are basically built-in templates
+processor(foreach).
+processor(match).
+processor(let).
+processor(when).
+
+default_var(text, '').
+default_var(date, 0).
+default_var(file, '.').
+default_var(Number, 0) :- Number=float; Number=integer.
+default_var(List, []) :- List=list;List=markdown;List=xml.
+default_var(struct, Empty) :- empty_assoc(Empty). 
+
 load_templates(SourceDir) :-
 	retractall(template(_, _, _)),
 	atom_concat(SourceDir, '/*.template.xml', TSource),
 	expand_file_name(TSource, TFiles),
-	process_templates(TFiles).
+	load_templates_h(TFiles).
 
-process_templates([]).
-process_templates([A|T]) :- 
+load_templates_h([]).
+load_templates_h([A|T]) :- 
 	(	load_xml(A, [XML], [space(remove)]),
 		read_template_xml(XML)
-	;	writeln('Failed to parse file':A), fail),
-	process_templates(T).
+	;	(	writeln('Failed to parse template':A), 
+			fail)),
+	load_templates_h(T).
 
 read_template_xml(element(templates, _, Content)) :- !,
 	maplist(read_template_xml, Content).
@@ -44,42 +58,46 @@ read_template_xml(Other) :-
 
 read_params([], T, T).
 read_params([element(param, Attributes, PC)|Tail], template(TName, Params, Content), Template) :-
-	process_param(Attributes, PC, (PKey, PValue)),
+	check_param(Attributes, PC, (PKey, PValue)),
 	put_assoc(PKey, Params, PValue, Params2),
 	read_params(Tail, template(TName, Params2, Content), Template).
 read_params([element(content, _, Content)|Tail], template(TName, P, []), Template) :-
 	read_params(Tail, template(TName, P, Content), Template).
 
-process_param(Attributes, Content, Param) :-
-	h_process_param_attr(Attributes, ('', '', true), P),
+check_param(Attributes, Content, Param) :-
+	h_check_param_attr(Attributes, ('', '', true), P),
 	(	valid_param(P),
-		process_param_type(P, Content, Param)
-	;	writeln('Invalid parameter':P), fail).
+		check_param_type(P, Content, Param)
+	;	(	writeln('Invalid parameter':P), 
+			fail)).
 
-h_process_param_attr([], P, P).
-h_process_param_attr([name=Name|List], ('', T, R), Param) :- 
-	h_process_param_attr(List, (Name, T, R), Param).
-h_process_param_attr([type=Type|List], (N, '', R), Param) :-
-	h_process_param_attr(List, (N, Type, R), Param).
-h_process_param_attr([required=Required|List], (N, T, true), Param) :-
-	h_process_param_attr(List, (N, T, Required), Param).
+h_check_param_attr([], P, P).
+h_check_param_attr([name=Name|List], ('', T, R), Param) :- !, 
+	(	read_term_from_atom(Name, Var, []),
+		atom(Var), !
+		;	(	writeln('Parameter names should be simple Prolog atoms':Name),
+				fail)),
+	h_check_param_attr(List, (Name, T, R), Param).
+h_check_param_attr([type=Type|List], (N, '', R), Param) :- !,
+	h_check_param_attr(List, (N, Type, R), Param).
+h_check_param_attr([required=Required|List], (N, T, true), Param) :- !,
+	h_check_param_attr(List, (N, T, Required), Param).
+h_check_param_attr([Unknown|_]) :-
+	writeln('Unknown parameter':Unknown), fail.
 
 valid_param((_, Type, Required)) :-
-	member(Type, [date, file, float, integer, list, markdown, struct, text, xml]),
+	default_var(Type, _),
 	member(Required, [false, true]).
 
-process_param_type((N, list, R), [element(param, SubAttr, SubContent)], (N, list(EName, EType), R)) :- !,
-	process_param(SubAttr, SubContent, (EName, EType, _)).
-process_param_type((N, struct, R), FieldList, (N, struct(Fields), R)) :- !,
-	maplist(process_param_struct_field, FieldList, FieldParams),
+check_param_type((N, list, R), [element(param, SubAttr, SubContent)], (N, list(EName, EType), R)) :- !,
+	check_param(SubAttr, SubContent, (EName, EType, _)).
+check_param_type((N, struct, R), FieldList, (N, struct(Fields), R)) :- !,
+	maplist(check_param_struct_field, FieldList, FieldParams),
 	list_to_assoc(FieldParams, Fields).
-process_param_type(P, _, P).
+check_param_type(P, _, P).
 
-process_param_struct_field(element(param, Attributes, Content), Name-(Type,Required)) :-
-	process_param(Attributes, Content, (Name, Type, Required)).
-
-processor(match).
-processor(foreach).
+check_param_struct_field(element(param, Attributes, Content), Name-(Type,Required)) :-
+	check_param(Attributes, Content, (Name, Type, Required)).
 
 process_file(SourceXml, OutHtml) :-
 	empty_assoc(Context),
@@ -94,7 +112,8 @@ process(Context, [element(Name, Attribs, Content)|XML], WorkingSet, Result) :-
 	;	template(Name, _, _), !,
 		tdo(Name, Context, Content, NodeResult)
 	;	(	(	process(Context, Content, [], SubResult)
-			;	!, writeln('Processing element failed':element(Name, Attrib2, '...')), fail),
+			;	(	writeln('Processing element failed':element(Name, Attrib2)), 
+					fail)),
 		NodeResult = [element(Name, Attrib2, SubResult)])),
 	append(WorkingSet, NodeResult, NewWorkingSet),
 	process(Context, XML, NewWorkingSet, Result).
@@ -112,14 +131,17 @@ tdo(Template, Context, Args, Result) :-
 	fill_params(Args, Params, Vars),
 	assoc_to_list(Vars, VarList),
 	(	def_vars(Context, VarList, LocalContext), !
-	;	!, writeln('Problem defining variables'), fail),
+	;	(	writeln('Problem defining variables'), 
+			fail)),
 	(	process(LocalContext, TemplateContent, [], Result), !
-	;	!, writeln('Processing template failed':Template), fail).
+	;	(	writeln('Processing template failed':Template), 
+			fail)).
 
 pdo(foreach(Context, [list=ListName], Content), Result) :- !,
 	do_formula(Context, ListName, (Type, List)),
 	(	Type=list(KeyName, SubType), !
-	;	writeln('Expected a list':ListName=Type), fail),
+	;	(	writeln('Expected a list':ListName=Type), 
+			fail)),
 	maplist(process_list_item(KeyName, Context, Content, SubType), List, NestedResult),
 	flatten(NestedResult, Result).
 
@@ -131,16 +153,30 @@ process_list_item(Key, Context, Content, Type, Item, Result) :-
 
 fill_params(Args, Params, Vars) :-
 	empty_assoc(EmptyVars),
-	fill_param_h(Args, Params, EmptyVars, Vars).
-
-fill_param_h([], Params, Vars1, Vars1) :-
+	fill_param_h(Args, Params, EmptyVars, DefinedVars),
 	assoc_to_list(Params, ParamList),
-	optional_params(ParamList).
+	add_defaults(ParamList, DefinedVars, Vars).
+
+fill_param_h([], _, Vars, Vars).
 fill_param_h([element(Name, _, Value)|Tail], Params, Vars1, VarsN) :-
 	del_assoc(Name, Params, (PType, _), Params2),
 	parse_arg(PType, Value, ParsedValue), !,
 	put_assoc(Name, Vars1, (PType, ParsedValue), Vars2),
 	fill_param_h(Tail, Params2, Vars2, VarsN).
+
+add_defaults([], Defined, Defined).
+add_defaults([Name-(Type, false)|Tail], Defined, Vars) :-
+	(	get_assoc(Name, Defined, _),
+		Defined2=Defined
+	;	default_var(Type, Default),
+		writeln('Adding default':Name:{Default}),
+		put_assoc(Name, Defined, (Type, Default), Defined2)),
+	add_defaults(Tail, Defined2, Vars).
+add_defaults([Name-(Type, true)|Tail], Defined, Vars) :-
+	get_assoc(Name, Defined, _), !,
+	add_defaults(Tail, Defined, Vars)
+	;	(	writeln('Missing required argument':(Name, Type)),
+			fail).
 
 parse_arg(xml, X, X) :- !.
 parse_arg(markdown, M, M) :- !.
@@ -152,8 +188,6 @@ parse_arg(list(_, EType), Args, Values) :- !, maplist(parse_list_arg(EType), Arg
 parse_arg(struct(Fields), Args, Values) :- !,
 	empty_assoc(Defined),
 	parse_struct_args(Fields, Defined, Args, Values).
-
-% TODO: parse_arg for structs
 parse_arg(Type, Value, _) :- writeln('Could not process var':Type=Value), !, fail.
 
 parse_list_arg(Type, element(_, _, A), V) :- parse_arg(Type, A, V).
@@ -203,19 +237,17 @@ def_struct_item(Context, Name-(Type, Data), Name-(Type, Parsed)) :-
 	def_var_h(Context, Type, Data, Parsed)
 	;	(writeln('Failed to define struct field':(Name, Type, Data)), fail).
 
-optional_params([]).
-optional_params([_-(_, false)|Tail]) :- optional_params(Tail).
-
 attrib_process(Context, Attrib, Result) :-
 	maplist(h_attrib_process(Context), Attrib, Result).
 h_attrib_process(C, A=V, A2=V2) :-
 	text_process(C, A, A2), atom(A2),
 	text_process(C, V, V2), atom(V2).
 
+text_process(_, '', '').
 text_process(Context, Text, Result) :-
 	(	extract(Text, BeforeMatch, '[[', F, ']]', AfterMatch),
-		read_term_from_atom(F, Exp, []),
 		!,
+		read_term_from_atom(F, Exp, []),
 		do_formula(Context, Exp, (_, Replaced)),
 		text_process(Context, AfterMatch, Processed),
 		xml_merge([BeforeMatch, Replaced, Processed], Result))
@@ -224,13 +256,14 @@ text_process(Context, Text, Result) :-
 do_formula(_, N, N) :- number(N).
 do_formula(Context, Struct:Field, Val) :- !,
 	do_formula(Context, Struct, (struct(_), S)),
-	!,
-	(	do_formula(S, Field, Val)
-	;	writeln('No such field':(Struct:Field)), fail).
-do_formula(Context, F, Value) :- atom(F),
+	(	do_formula(S, Field, Val), !
+	;	(	writeln('No such field':{Struct:Field}), 
+			fail)).
+do_formula(Context, F, Value) :- atom(F), !,
 	get_assoc(F, Context, Value)
-	; 	writeln('Missing variable':F<Context),
-		Value=atom_concat('missing variable:', F).
+	; 	(	writeln('Missing variable':F<Context), 
+			fail).
+do_formula(_, F, _) :- writeln('Bad formula':F), !, fail.
 
 split(Text, Key, Before, After) :- atom(Text), atom(Key),
 	sub_atom(Text, A, _, B, Key),

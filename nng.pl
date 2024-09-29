@@ -10,7 +10,8 @@
 :- use_module(templates).
 
 generate(Source, Out) :-
-	load_templates(Source),
+	(	load_templates(Source)
+	;	writeln('Failed to generate templates.'), fail),
 	!,
 	writeln('%-----TEMPLATES GENERATED-----%'),
 	gen_dir(Source, Out),
@@ -23,7 +24,6 @@ gen_dir(SourceDir, OutDir) :-
 	;	make_directory(OutDir)),
 	!,
 	directory_files(SourceDir, ['.', '..'|SFiles]),
-	writeln(SourceDir:SFiles),
 	h_gen_files(SourceDir, OutDir, SFiles).
 
 gen_file(SFile, OFile) :-
@@ -36,7 +36,7 @@ gen_file(SFile, OFile) :-
 	!,
 	(	open(OFile, write, Stream, []),
 		writeln('Writing to':OFile),
-		html_write(Stream, OutHtml, []),
+		xml_write(Stream, OutHtml, [doctype(html), net(true)]),
 		!,
 		( close(Stream); writeln('The file didn\'t close?'))
 		;	print_term('Failed to write':OutHtml, [quoted(true)])).

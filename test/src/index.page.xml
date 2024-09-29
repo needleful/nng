@@ -10,4 +10,7 @@
 			<title>World</title>
 		</el>
 	</nav>
+	<content>
+		<p>This is me saying... helo!</p>
+	</content>
 </page>
