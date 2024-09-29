@@ -3,5 +3,8 @@
 :- use_module(nng).
 :- initialization(main, main).
 
+main([]) :-
+	generate('test/src', 'test/www').
+
 main([InFolder, OutFolder]) :-
-	gen_dir(InFolder, OutFolder).
+	generate(InFolder, OutFolder).
