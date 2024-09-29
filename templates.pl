@@ -10,7 +10,9 @@
 
 % template(Name, Parameters, Content).
 % Parameters defined as an association between PName and (PType, Required)
-% PType can be text, integer, float, file, xml, or list(PName, PType), which is recursive
+% PType can be several atoms, or the recursive ones:
+% 	list(PName, PType)
+%	struct(SubFields), where Subfields is the same association as Parameters
 :- dynamic(template/3).
 
 load_templates(SourceDir) :-
@@ -96,10 +98,10 @@ process(Context, [element(Name, Attribs, Content)|XML], WorkingSet, Result) :-
 		NodeResult = [element(Name, Attrib2, SubResult)])),
 	append(WorkingSet, NodeResult, NewWorkingSet),
 	process(Context, XML, NewWorkingSet, Result).
-process(Context, [Atom|XML], WorkingSet, Result) :- atom(Atom),
-	(	text_process(Context, Atom, Replaced)
-	;	!, writeln('Text replacement failed':Atom)),
-	(	Replaced=[_|_], NodeResult=Replaced
+process(Context, [Atom|XML], WorkingSet, Result) :- !, atom(Atom),
+	(	text_process(Context, Atom, Replaced), !
+	;	writeln('Text replacement failed':Atom)),
+	(	Replaced=[_|_], NodeResult=Replaced, !
 	;	NodeResult=[Replaced]),
 	append(WorkingSet, NodeResult, NewWorkingSet),
 	process(Context, XML, NewWorkingSet, Result).
@@ -109,14 +111,14 @@ tdo(Template, Context, Args, Result) :-
 	!,
 	fill_params(Args, Params, Vars),
 	assoc_to_list(Vars, VarList),
-	(	def_vars(Context, VarList, LocalContext)
+	(	def_vars(Context, VarList, LocalContext), !
 	;	!, writeln('Problem defining variables'), fail),
-	(	process(LocalContext, TemplateContent, [], Result)
+	(	process(LocalContext, TemplateContent, [], Result), !
 	;	!, writeln('Processing template failed':Template), fail).
 
 pdo(foreach(Context, [list=ListName], Content), Result) :- !,
 	do_formula(Context, ListName, (Type, List)),
-	(	Type=list(KeyName, SubType)
+	(	Type=list(KeyName, SubType), !
 	;	writeln('Expected a list':ListName=Type), fail),
 	maplist(process_list_item(KeyName, Context, Content, SubType), List, NestedResult),
 	flatten(NestedResult, Result).
@@ -142,21 +144,45 @@ fill_param_h([element(Name, _, Value)|Tail], Params, Vars1, VarsN) :-
 
 parse_arg(xml, X, X) :- !.
 parse_arg(markdown, M, M) :- !.
-parse_arg(integer, [I], Int) :- atom_number(I, Int), integer(Int), !.
-parse_arg(float, [F], Float) :- atom_number(F, Float), !.
+parse_arg(integer, [I], Int) :- !, atom_number(I, Int), integer(Int).
+parse_arg(float, [F], Float) :- !, atom_number(F, Float).
 parse_arg(file, [F], F) :- atom(F), !.
 parse_arg(text, [T], T) :- atom(T), !.
-parse_arg(list(_, EType), Args, Values) :- maplist(parse_list_arg(EType), Args, Values), !. 
+parse_arg(list(_, EType), Args, Values) :- !, maplist(parse_list_arg(EType), Args, Values).
+parse_arg(struct(Fields), Args, Values) :- !,
+	empty_assoc(Defined),
+	parse_struct_args(Fields, Defined, Args, Values).
+
 % TODO: parse_arg for structs
 parse_arg(Type, Value, _) :- writeln('Could not process var':Type=Value), !, fail.
 
 parse_list_arg(Type, element(_, _, A), V) :- parse_arg(Type, A, V).
 
+parse_struct_args(Fields, Defined, [], Defined) :-
+	assoc_to_list(Defined, DefList),
+	remove_keys(Fields, DefList, Undefined),
+	(	empty_assoc(Undefined), !
+	;	assoc_to_list(Undefined, UndefList),
+		(	maplist(=(_-(_, _, false)), UndefList), !
+		;	writeln('Missing fields in struct':UndefList), fail)).
+parse_struct_args(Fields, Defined, [element(Name, _, Value)|Tail], Values) :-
+	(	\+get_assoc(Name, Defined, _), !
+	;	writeln('Duplicate struct field':Name), fail),
+	get_assoc(Name, Fields, (Type, _)),
+	parse_arg(Type, Value, Parsed),
+	put_assoc(Name, Defined, (Type, Parsed), Defined2),
+	parse_struct_args(Fields, Defined2, Tail, Values).
+
+remove_keys(Assoc, [], Assoc).
+remove_keys(Assoc, [Key-_|Tail], Result) :-
+	del_assoc(Key, Assoc, _, Assoc2),
+	remove_keys(Assoc2, Tail, Result).
+
 def_vars(C, [], C).
 def_vars(Context, [Key-Value|Tail], NewContext) :-
 	(Type, Data) = Value,
 	(	def_var_h(Context, Type, Data, ParsedData),
-		put_assoc(Key, Context, (Type, ParsedData), Context2)
+		put_assoc(Key, Context, (Type, ParsedData), Context2), !
 	;	writeln('Problem defining variable':(Key:Type)=Data), fail),
 	!, def_vars(Context2, Tail, NewContext).
 
@@ -167,7 +193,15 @@ def_var_h(Context, list(_, SubType), Data, ParsedData) :-
 	maplist(def_var_h(Context, SubType), Data, ParsedData).
 def_var_h(Context, Type, Data, ParsedData) :- (Type=xml;Type=markdown),
 	process(Context, Data, [], ParsedData).
-def_var_h(_, Type, Data, _) :- writeln('Could not parse':(Type, Data)), fail.
+def_var_h(Context, struct(_), Data, ParsedData) :-
+	assoc_to_list(Data, DataList),
+	maplist(def_struct_item(Context), DataList, ParseList),
+	list_to_assoc(ParseList, ParsedData).
+def_var_h(_, Type, Data, _) :- writeln('Could not define args':(Type, Data)), fail.
+
+def_struct_item(Context, Name-(Type, Data), Name-(Type, Parsed)) :-
+	def_var_h(Context, Type, Data, Parsed)
+	;	(writeln('Failed to define struct field':(Name, Type, Data)), fail).
 
 optional_params([]).
 optional_params([_-(_, false)|Tail]) :- optional_params(Tail).
@@ -180,17 +214,22 @@ h_attrib_process(C, A=V, A2=V2) :-
 
 text_process(Context, Text, Result) :-
 	(	extract(Text, BeforeMatch, '[[', F, ']]', AfterMatch),
-		%writeln(formula:F->text:Text),
+		read_term_from_atom(F, Exp, []),
 		!,
-		do_formula(Context, F, (_, Replaced)),
+		do_formula(Context, Exp, (_, Replaced)),
 		text_process(Context, AfterMatch, Processed),
 		xml_merge([BeforeMatch, Replaced, Processed], Result))
 	;	Result = Text.
 
 do_formula(_, N, N) :- number(N).
+do_formula(Context, Struct:Field, Val) :- !,
+	do_formula(Context, Struct, (struct(_), S)),
+	!,
+	(	do_formula(S, Field, Val)
+	;	writeln('No such field':(Struct:Field)), fail).
 do_formula(Context, F, Value) :- atom(F),
 	get_assoc(F, Context, Value)
-	; 	writeln('Missing variable':F),
+	; 	writeln('Missing variable':F<Context),
 		Value=atom_concat('missing variable:', F).
 
 split(Text, Key, Before, After) :- atom(Text), atom(Key),

@@ -12,6 +12,7 @@ m3
 		- foreach
 			p0
 			i4
+			x
 		- match
 			p0
 			i5
@@ -24,3 +25,12 @@ m3
 		- file existence
 			p0
 			i8
+		- struct fields
+			p0
+			i9
+	- Types
+		p0
+		i10
+		- Structs
+			p0
+			i12

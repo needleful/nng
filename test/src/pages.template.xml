@@ -1,16 +1,20 @@
 <templates>
 	<template name='page'>
 		<param name='title' type='text'/>
-		<param name='custom-nav-list' type='list' required='false'>
-			<param name='link' type='text'/>
+		<param name='nav' type='list' required='false'>
+			<param name='el' type='struct'>
+				<param name='link' type='text'/>
+				<param name='title' type='text'/>
+			</param>
 		</param>
 		<content>
 			<html>
 				<h1>[[title]]</h1>
 				<ul>
-					<foreach list='custom-nav-list'>
-						<li>/<a href="[[link]]">[[link]]</a></li>
+					<foreach list='nav'>
+						<li><a href="[[el:link]]">[[el:title]]</a>/</li>
 					</foreach>
+					<li>[[title]]</li>
 				</ul>
 			</html>
 		</content>

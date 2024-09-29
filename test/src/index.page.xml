@@ -1,7 +1,13 @@
 <page>
 	<title>Hello World</title>
-	<custom-nav-list>
-		<link>hello</link>
-		<link>world</link>
-	</custom-nav-list>
+	<nav>
+		<el>
+			<link>/hello</link>
+			<title>Hello</title>
+		</el>
+		<el>
+			<link>/hello/world</link>
+			<title>World</title>
+		</el>
+	</nav>
 </page>
