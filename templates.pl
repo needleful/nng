@@ -21,12 +21,29 @@ processor(match).
 processor(let).
 processor(when).
 
+% Replacements for Comparison operators
+% Maybe someday I can get them working with read_term_from_atom
+:-op(700, xfx, lt).
+:-op(700, xfx, gt).
+:-op(700, xfx, leq).
+:-op(700, xfx, geq).
+:-op(700, xfx, eq).
+:-op(700, xfx, neq).
+
+A lt B :- A<B.
+A leq B :- A =< B. 
+A gt B :- A>B.
+A geq B :- A >= B.
+A eq B :- A == B.
+A neq B :- A \= B.
+
 default_var(text, '').
 default_var(date, 0).
 default_var(file, '.').
 default_var(Number, 0) :- Number=float; Number=integer.
-default_var(List, []) :- List=list;List=markdown;List=xml.
-default_var(struct, Empty) :- empty_assoc(Empty). 
+default_var(List, []) :- List=list(_,_);List=markdown;List=xml.
+default_var(struct(_), Empty) :- empty_assoc(Empty). 
+default_var(Type, _) :- throw('Unknown type':Type).
 
 load_templates(SourceDir) :-
 	retractall(template(_, _, _)),
@@ -48,9 +65,9 @@ read_template_xml(element(template, [name=TempName], Content)) :- !,
 	\+ processor(TempName),
 	empty_assoc(Params),
 	(	read_params(Content, template(TempName, Params, []), Template)
-	;	writeln('Failed to parse template':TempName), fail),
-	writeln(template:TempName),
-	assert(Template).
+	->	writeln(template:TempName),
+		assert(Template)
+	;	writeln('Failed to parse template':TempName), fail).
 read_template_xml(Other) :-
 	writeln('Invalid Template XML:'),
 	print_term(Other, [indent_arguments(3)]),
@@ -74,10 +91,10 @@ check_param(Attributes, Content, Param) :-
 h_check_param_attr([], P, P).
 h_check_param_attr([name=Name|List], ('', T, R), Param) :- !, 
 	(	read_term_from_atom(Name, Var, []),
-		atom(Var), !
-		;	(	writeln('Parameter names should be simple Prolog atoms':Name),
-				fail)),
-	h_check_param_attr(List, (Name, T, R), Param).
+		atom(Var)
+	->	h_check_param_attr(List, (Name, T, R), Param)
+	;	(	writeln('Parameter names should be simple Prolog atoms':Name),
+			fail)).
 h_check_param_attr([type=Type|List], (N, '', R), Param) :- !,
 	h_check_param_attr(List, (N, Type, R), Param).
 h_check_param_attr([required=Required|List], (N, T, true), Param) :- !,
@@ -86,7 +103,7 @@ h_check_param_attr([Unknown|_]) :-
 	writeln('Unknown parameter':Unknown), fail.
 
 valid_param((_, Type, Required)) :-
-	default_var(Type, _),
+	member(Type, [text, date, file, float, integer, xml, list, markdown, struct]),
 	member(Required, [false, true]).
 
 check_param_type((N, list, R), [element(param, SubAttr, SubContent)], (N, list(EName, EType), R)) :- !,
@@ -112,8 +129,8 @@ process(Context, [element(Name, Attribs, Content)|XML], WorkingSet, Result) :-
 	;	template(Name, _, _), !,
 		tdo(Name, Context, Content, NodeResult)
 	;	(	(	process(Context, Content, [], SubResult)
-			;	(	writeln('Processing element failed':element(Name, Attrib2)), 
-					fail)),
+			;	writeln('Processing element failed':element(Name, Attrib2)), 
+				fail),
 		NodeResult = [element(Name, Attrib2, SubResult)])),
 	append(WorkingSet, NodeResult, NewWorkingSet),
 	process(Context, XML, NewWorkingSet, Result).
@@ -149,7 +166,8 @@ pdo(Other, _) :- !, writeln('Unknown processor':Other), fail.
 
 process_list_item(Key, Context, Content, Type, Item, Result) :-
 	put_assoc(Key, Context, (Type, Item), ItemContext),
-	process(ItemContext, Content, [], Result).
+	(	process(ItemContext, Content, [], Result)
+	;	throw('Bad list item':Item)).
 
 fill_params(Args, Params, Vars) :-
 	empty_assoc(EmptyVars),
@@ -169,7 +187,6 @@ add_defaults([Name-(Type, false)|Tail], Defined, Vars) :-
 	(	get_assoc(Name, Defined, _),
 		Defined2=Defined
 	;	default_var(Type, Default),
-		writeln('Adding default':Name:{Default}),
 		put_assoc(Name, Defined, (Type, Default), Defined2)),
 	add_defaults(Tail, Defined2, Vars).
 add_defaults([Name-(Type, true)|Tail], Defined, Vars) :-
@@ -249,21 +266,62 @@ text_process(Context, Text, Result) :-
 		!,
 		read_term_from_atom(F, Exp, []),
 		do_formula(Context, Exp, (_, Replaced)),
+		(	atomic(Replaced)
+		->	make_atom(Replaced, RText)
+		;	RText=Replaced),
 		text_process(Context, AfterMatch, Processed),
-		xml_merge([BeforeMatch, Replaced, Processed], Result))
+		xml_merge([BeforeMatch, RText, Processed], Result))
 	;	Result = Text.
 
-do_formula(_, N, N) :- number(N).
-do_formula(Context, Struct:Field, Val) :- !,
-	do_formula(Context, Struct, (struct(_), S)),
-	(	do_formula(S, Field, Val), !
-	;	(	writeln('No such field':{Struct:Field}), 
-			fail)).
+do_formula(_, true, (text, true)).
+do_formula(_, false, (text, false)).
+do_formula(_, N, (integer, N)) :- integer(N).
+do_formula(_, N, (float, N)) :- float(N).
 do_formula(Context, F, Value) :- atom(F), !,
-	get_assoc(F, Context, Value)
-	; 	(	writeln('Missing variable':F<Context), 
-			fail).
+	(	get_assoc(F, Context, Value), !
+		; 	throw('Missing variable':F=>{Context})).
+do_formula(Context, Struct:Field, Val) :- !,
+	do_formula(Context, Struct, (_, S)),
+	(	do_formula(S, Field, Val), !
+	;	throw('No such field':{Struct:Field})).
+do_formula(Context, Math, (Type, Val)) :- Math =.. [Op, A, B],
+	member(Op, [+,-,/,*]), !,
+	do_formula(Context, A, (_, NA)), do_formula(Context, B, (_, NB)),
+	(	number(NA), number(NB)
+	;	throw('Numbers expected':Math)),
+	Fn =.. [Op, NA, NB],
+	Val is Fn,
+	(	integer(Val)
+	->	Type=integer
+	;	Type=float).
+do_formula(Context, Comparison, (text, Val)) :- Comparison =.. [Op, A, B],
+	member(Op, [==,\=,<,>,=<,>=,=:=,lt,gt,leq,geq,eq,neq]), !,
+	(	do_formula(Context, A, (_, LA)),
+		do_formula(Context, B, (_, LB)),
+	(	number(LA), number(LB)
+	;	throw('Numbers expected':Comparison)),
+		Exp =.. [Op, LA, LB],
+		(	call(Exp)
+		->	Val = true
+		;	Val = false)).
+do_formula(Context, Logic, (text, Val)) :- Logic =.. [Op, A, B],
+	member(Op, [';',',']), !,
+	(	do_formula(Context, A, (text, LA)),
+		do_formula(Context, B, (text, LB)),
+		Exp =..[Op, LA, LB],
+		simple_logic(Exp, Val)
+		;	throw('Bad logic function':Logic)).
 do_formula(_, F, _) :- writeln('Bad formula':F), !, fail.
+
+simple_logic((false;false), false).
+simple_logic((_;_), true).
+simple_logic((true,true), true).
+simple_logic((_,_), false).
+
+simple_logic(Other, _) :- throw('Unknown logic expression':Other).
+
+make_atom(A, A) :- atom(A).
+make_atom(N, A) :- number(N), atom_number(A, N).
 
 split(Text, Key, Before, After) :- atom(Text), atom(Key),
 	sub_atom(Text, A, _, B, Key),

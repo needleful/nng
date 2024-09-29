@@ -1,16 +1,7 @@
 <page>
-	<title>Hello World</title>
-	<nav>
-		<el>
-			<link>/hello</link>
-			<title>Hello</title>
-		</el>
-		<el>
-			<link>/hello/world</link>
-			<title>World</title>
-		</el>
-	</nav>
-	<content>
-		<p>This is me saying... helo!</p>
-	</content>
+	<numbers>
+		<number>-20</number>
+		<number>3</number>
+		<number>10</number>
+	</numbers>
 </page>

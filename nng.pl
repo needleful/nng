@@ -34,12 +34,15 @@ gen_file(SFile, OFile) :-
 		process_file(SourceXml, OutHtml)
 	;	writeln('Failed to process file':SFile), fail),
 	!,
-	(	open(OFile, write, Stream, []),
-		writeln('Writing to':OFile),
-		xml_write(Stream, OutHtml, [doctype(html), net(true)]),
+	(	writeln('Writing to':OFile),
+		open(OFile, write, Stream, []),
+		writeln(Stream, '<!DOCTYPE html>'),
+		html_write(Stream, OutHtml, [
+			header(false), layout(false)]),
 		!,
-		( close(Stream); writeln('The file didn\'t close?'))
-		;	print_term('Failed to write':OutHtml, [quoted(true)])).
+		(	close(Stream)
+		;	writeln('The file didn\'t close?'))
+	;	print_term('Failed to write':OutHtml, [quoted(true)])).
 
 h_gen_files(_, _, []).
 h_gen_files(S, O, ['.'|F]) :- h_gen_files(S,O,F).
@@ -49,9 +52,11 @@ h_gen_files(SourceDir, OutDir, [S|Files]) :-
 	(	exists_directory(SPath),
 		directory_file_path(OutDir, S, OPath),
 		gen_dir(SPath, OPath)
+	;	atom_concat(_, '.template.xml', S)
 	;	atom_concat(Name, '.page.xml', S),
 		atom_concat(Name, '.html', OFile),
 		!,
 		directory_file_path(OutDir, OFile, OPath),
-		gen_file(SPath, OPath)),
+		(	gen_file(SPath, OPath)
+		;	writeln('Skipping'))),
 	h_gen_files(SourceDir, OutDir, Files).
