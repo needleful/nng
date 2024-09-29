@@ -1,45 +1,17 @@
 <templates>
-	<template name='header-defaults'>
-		<content>
-			<link rel='stylesheet' href='/needleful.css'/>
-			<script type='text/javascript' src='/needleful.js'/>
-		</content>
-	</template>
 	<template name='page'>
 		<param name='title' type='text'/>
-		<param name='content' type='xml'/>
 		<param name='custom-nav-list' type='list' required='false'>
 			<param name='link' type='text'/>
 		</param>
 		<content>
 			<html>
-				<head>
-					<title>[[title]] - needleful dot net</title>
-					<header-defaults/>
-				</head>
-				<body>
-					<h1>My cool page: [[title]]</h1>
-					<div class='content'>
-						<div id='titlebar'>
-							<ul class='navbar'>
-								<li><a href="/">needleful dot net</a> / </li>
-								<foreach list='custom-nav-list'>
-									<li><a href="[[link]]">[[link]]</a> / </li>
-								</foreach>
-								<li>[[title]]</li>
-							</ul>
-							<button id='burger-button' class='not-clicked' aria-label='burger button' onclick='burgerClicked()'>
-								<img id='burger-img' alt='burger button' src='/burger.svg'/>
-							</button>
-							<div id='burger-block' class='noshow'>
-								<img class='full-line' style='min-width: 400px;' src='/img/burger.jpg'/>
-								<p class='epic full-line'>Burger.</p>
-							</div>
-						</div>
-						[[content]]
-						<p>Thanks, gamer.</p>
-					</div>
-				</body>
+				<h1>[[title]]</h1>
+				<ul>
+					<foreach list='custom-nav-list'>
+						<li>/<a href="[[link]]">[[link]]</a></li>
+					</foreach>
+				</ul>
 			</html>
 		</content>
 	</template>

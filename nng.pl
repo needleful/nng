@@ -1,5 +1,5 @@
-module(nng, [
-	process_files/2]).
+:- module(nng, [
+	gen_dir/2]).
 
 :- use_module(library(filesex)).
 :- use_module(library(lists)).
@@ -33,10 +33,13 @@ gen_file(SFile, OFile) :-
 		load_xml(SFile, SourceXml, [space(remove)]),
 		process_file(SourceXml, OutHtml)
 	;	writeln('Failed to process file':SFile), fail),
-	open(OFile, write, FdOut, []),
-	% print_term(OutHtml, [indent_arguments(3)]),
-	html_write(FdOut, OutHtml, [doctype(html)]),
-	close(FdOut).
+	!,
+	(	absolute_file_name(OFile, Out),
+		open(Out, write, FdOut, []),
+		writeln('Writing to':Out),
+		html_write(FdOut, OutHtml, []),
+		( close(FdOut); writeln('The file didn\'t close?'))
+		;	print_term('Failed to write':OutHtml, [quoted(true)])).
 
 h_gen_files(_, _, []).
 h_gen_files(S, O, ['.'|F]) :- h_gen_files(S,O,F).

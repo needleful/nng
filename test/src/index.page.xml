@@ -4,7 +4,4 @@
 		<link>hello</link>
 		<link>world</link>
 	</custom-nav-list>
-	<content>
-		<p>Hello, world!</p>
-	</content>
 </page>
