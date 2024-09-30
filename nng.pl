@@ -13,9 +13,8 @@ generate(Source, Out) :-
 	(	load_templates(Source)
 	;	writeln('Failed to generate templates.'), fail),
 	!,
-	writeln('%-----TEMPLATES GENERATED-----%'),
-	gen_dir(Source, Out),
-	!.
+	writeln('%-----TEMPLATES GENERATED-----%').
+	%, gen_dir(Source, Out).
 
 gen_dir(SourceDir, OutDir) :-
 	writeln(dir:SourceDir->OutDir),

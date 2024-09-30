@@ -11,12 +11,8 @@
 :- use_module(library(pprint)).
 :- use_module(library(sgml)).
 
-% template(Name, Parameters, Content).
-% Parameters defined as an association between PName and (PType, Required)
-% PType can be several atoms, or the recursive ones:
-% 	list(PName, PType)
-%	struct(SubFields), where Subfields is the same association as Parameters
-:- dynamic(template/3).
+% template(Name, Context, Input, Result).
+:- dynamic(template/4).
 
 % Processors are basically built-in templates
 processor(foreach).
@@ -38,14 +34,49 @@ load_templates(SourceDir) :-
 	retractall(template(_, _, _)),
 	atom_concat(SourceDir, '/*.template.xml', TSource),
 	expand_file_name(TSource, TFiles),
-	load_templates_h(TFiles).
+	maplist(load_template, TFiles).
 
-load_templates_h([]).
-load_templates_h([A|T]) :- 
-	(	load_xml(A, [XML], [space(remove)]),
-		read_template_xml(XML)
-	;	err(A, 'Failed to parse template')),
-	load_templates_h(T).
+load_templates_h(File) :-
+	load_xml(File, [XML], [space(remove)]),
+	(	compile_file(XML)
+	;	err(File:XML, 'Failed to compile template')).
+
+compile_file(element(templates, _, Templates)) :-
+	maplist(compile_template, Templates).
+compile_file(XML) :-
+	complie_template(XML).
+
+compile_template(element(template, [name=TName], Elements)) :-
+	\+ processor(TName),
+	\+ clause(template(TName, _, _, _), _),
+	empty_assoc(Params),
+	compile_elements(Elements, (Context, Input, Result), Params, Vars, ContentWriter),
+	Program = (	
+		(	template_read_args(Params, Input, Vars),
+		;	err(TName, 'Failed to read input')),
+		(	ContentWriter
+		;	err(TName, 'Failed to write content'))
+	),
+	assert(template(TName, Context, Input, Result) :- Program).
+
+compile_elements(E, Args, Params, Vars, Writer) :-
+	empty_assoc(Empty),
+	read_info(E, Empty, Params, Content),
+	build_writer(Params, Vars, Content, Writer).
+
+read_info([], P, P, C) :- nonvar(C).
+read_info([element(param, Attr, PC)|Tail], InParams, Params, Content) :-
+	check_param(Attr, PC, (Key, Value)),
+	(	\+ get_assoc(Key, InParams, _)
+	;	err(Key, 'Duplicate parameter name')),
+	put_assoc(Key, InParams, Value, Params2),
+	read_info(Tail, Params2, Params, Content).
+read_info([element(content, Attr, C)|Tail], InParams, Params, Content) :-
+	(	Content=content(Attr, C)
+	;	err(Content\=content(Attr, C), 'Multiple content elements')),
+	read_info(Tail, InParams, Params, Content).
+
+build_writer(_,_,_, true).
 
 read_template_xml(element(templates, _, Content)) :- !,
 	maplist(read_template_xml, Content).
