@@ -52,14 +52,14 @@ compile_template(element(template, [name=TName], Elements)) :-
 	empty_assoc(Params),
 	compile_elements(Elements, (Context, Input, Result), Params, Vars, ContentWriter),
 	Program = (	
-		(	template_read_args(Params, Input, Vars),
+		(	read_args(Params, Input, Vars),
 		;	err(TName, 'Failed to read input')),
 		(	ContentWriter
 		;	err(TName, 'Failed to write content'))
 	),
 	assert(template(TName, Context, Input, Result) :- Program).
 
-compile_elements(E, Args, Params, Vars, Writer) :-
+compile_elements(E, Args, Params, VarsWriter) :-
 	empty_assoc(Empty),
 	read_info(E, Empty, Params, Content),
 	build_writer(Params, Vars, Content, Writer).
