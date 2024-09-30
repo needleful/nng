@@ -26,24 +26,6 @@ gen_dir(SourceDir, OutDir) :-
 	directory_files(SourceDir, ['.', '..'|SFiles]),
 	h_gen_files(SourceDir, OutDir, SFiles).
 
-gen_file(SFile, OFile) :-
-	(	writeln(in:SFile->out:OFile),
-		exists_file(SFile),
-		access_file(OFile, write),
-		load_xml(SFile, SourceXml, [space(remove)]),
-		process_file(SourceXml, OutHtml)
-	;	writeln('Failed to process file':SFile), fail),
-	!,
-	(	writeln('Writing to':OFile),
-		open(OFile, write, Stream, []),
-		writeln(Stream, '<!DOCTYPE html>'),
-		html_write(Stream, OutHtml, [
-			header(false), layout(false)]),
-		!,
-		(	close(Stream)
-		;	writeln('The file didn\'t close?'))
-	;	print_term('Failed to write':OutHtml, [quoted(true)])).
-
 h_gen_files(_, _, []).
 h_gen_files(S, O, ['.'|F]) :- h_gen_files(S,O,F).
 h_gen_files(S, O, ['..'|F]) :- h_gen_files(S,O,F).
@@ -57,6 +39,6 @@ h_gen_files(SourceDir, OutDir, [S|Files]) :-
 		atom_concat(Name, '.html', OFile),
 		!,
 		directory_file_path(OutDir, OFile, OPath),
-		(	gen_file(SPath, OPath)
+		(	process_file(SPath, OPath)
 		;	writeln('Skipping'))),
 	h_gen_files(SourceDir, OutDir, Files).

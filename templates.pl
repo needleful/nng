@@ -1,9 +1,11 @@
 :- module(templates, [
 	load_templates/1,
-	process_file/2
+	process_file/2,
+	process_xml/2
 	]).
 
 :- use_module(library(assoc)).
+:- use_module(library(filesex)).
 :- use_module(library(lists)).
 :- use_module(library(pprint)).
 :- use_module(library(sgml)).
@@ -20,22 +22,6 @@ processor(foreach).
 processor(match).
 processor(let).
 processor(when).
-
-% Replacements for Comparison operators
-% Maybe someday I can get them working with read_term_from_atom
-:-op(700, xfx, lt).
-:-op(700, xfx, gt).
-:-op(700, xfx, leq).
-:-op(700, xfx, geq).
-:-op(700, xfx, eq).
-:-op(700, xfx, neq).
-
-A lt B :- A<B.
-A leq B :- A =< B. 
-A gt B :- A>B.
-A geq B :- A >= B.
-A eq B :- A == B.
-A neq B :- A \= B.
 
 default_var(text, '').
 default_var(date, 0).
@@ -90,7 +76,7 @@ check_param(Attributes, Content, Param) :-
 
 h_check_param_attr([], P, P).
 h_check_param_attr([name=Name|List], ('', T, R), Param) :- !, 
-	(	read_term_from_atom(Name, Var, []),
+	(	read_term_from_atom(Name, Var, [double_quotes(string)]),
 		atom(Var)
 	->	h_check_param_attr(List, (Name, T, R), Param)
 	;	(	writeln('Parameter names should be simple Prolog atoms':Name),
@@ -116,7 +102,26 @@ check_param_type(P, _, P).
 check_param_struct_field(element(param, Attributes, Content), Name-(Type,Required)) :-
 	check_param(Attributes, Content, (Name, Type, Required)).
 
-process_file(SourceXml, OutHtml) :-
+process_file(SFile, OFile) :-
+	(	writeln(in:SFile->out:OFile),
+		b_setval(current_source, SFile),
+		exists_file(SFile),
+		access_file(OFile, write),
+		load_xml(SFile, SourceXml, [space(remove)]),
+		process_xml(SourceXml, OutHtml)
+	;	writeln('Failed to process file':SFile), fail),
+	!,
+	(	writeln('Writing to':OFile),
+		open(OFile, write, Stream, []),
+		writeln(Stream, '<!DOCTYPE html>'),
+		html_write(Stream, OutHtml, [
+			header(false), layout(false)]),
+		!,
+		(	close(Stream)
+		;	writeln('The file didn\'t close?'))
+	;	print_term('Failed to write':OutHtml, [quoted(true)])).
+
+process_xml(SourceXml, OutHtml) :-
 	empty_assoc(Context),
 	process(Context, SourceXml, [], OutHtml).
 
@@ -161,8 +166,18 @@ pdo(foreach(Context, [list=ListName], Content), Result) :- !,
 			fail)),
 	maplist(process_list_item(KeyName, Context, Content, SubType), List, NestedResult),
 	flatten(NestedResult, Result).
-
+pdo(match(Context, [val=VText], Content), Result) :- !,
+	read_term_from_atom(VText, Formula, [double_quotes(string)]),
+	do_formula(Context, Formula, (text, Match)),
+	match_(Context, Match, Content, [], Result).
 pdo(Other, _) :- !, writeln('Unknown processor':Other), fail.
+
+match_(_,_,[], WorkingSet, WorkingSet).
+match_(Context, Match, [element(Match, _, Content)|Tail], WorkingSet, Result) :-
+	process(Context, Content, [], NodeResult),
+	append(WorkingSet, NodeResult, NewSet),
+	match_(Context, Match, Tail, NewSet, Result).
+match_(C,M,[_|T],S,R) :- match_(C,M,T,S,R).
 
 process_list_item(Key, Context, Content, Type, Item, Result) :-
 	put_assoc(Key, Context, (Type, Item), ItemContext),
@@ -264,7 +279,7 @@ text_process(_, '', '').
 text_process(Context, Text, Result) :-
 	(	extract(Text, BeforeMatch, '[[', F, ']]', AfterMatch),
 		!,
-		read_term_from_atom(F, Exp, []),
+		read_term_from_atom(F, Exp, [double_quotes(string)]),
 		do_formula(Context, Exp, (_, Replaced)),
 		(	atomic(Replaced)
 		->	make_atom(Replaced, RText)
@@ -273,10 +288,33 @@ text_process(Context, Text, Result) :-
 		xml_merge([BeforeMatch, RText, Processed], Result))
 	;	Result = Text.
 
+% Replacements for Comparison operators
+% Maybe someday I can get them working with read_term_from_atom
+:-op(700, xfx, lt).
+:-op(700, xfx, gt).
+:-op(700, xfx, leq).
+:-op(700, xfx, geq).
+:-op(700, xfx, eq).
+:-op(700, xfx, neq).
+
+A lt B :- A<B.
+A leq B :- A =< B. 
+A gt B :- A>B.
+A geq B :- A >= B.
+A eq B :- A == B.
+A neq B :- A \= B.
+
+% Other formula predicates
+src_file_exists(RelPath) :- atom(RelPath),
+	b_getval(current_source, SourceFile),
+	relative_file_name(RealPath, SourceFile, RelPath),
+	exists_file(RealPath).
+
 do_formula(_, true, (text, true)).
 do_formula(_, false, (text, false)).
 do_formula(_, N, (integer, N)) :- integer(N).
 do_formula(_, N, (float, N)) :- float(N).
+do_formula(_, S, (text, A)) :- string(S), string_to_atom(S, A).
 do_formula(Context, F, Value) :- atom(F), !,
 	(	get_assoc(F, Context, Value), !
 		; 	throw('Missing variable':F=>{Context})).
@@ -284,34 +322,36 @@ do_formula(Context, Struct:Field, Val) :- !,
 	do_formula(Context, Struct, (_, S)),
 	(	do_formula(S, Field, Val), !
 	;	throw('No such field':{Struct:Field})).
+
 do_formula(Context, Math, (Type, Val)) :- Math =.. [Op, A, B],
 	member(Op, [+,-,/,*]), !,
 	do_formula(Context, A, (_, NA)), do_formula(Context, B, (_, NB)),
-	(	number(NA), number(NB)
-	;	throw('Numbers expected':Math)),
 	Fn =.. [Op, NA, NB],
+	(	number(NA), number(NB)
+	;	throw('Numbers expected':Fn)),
 	Val is Fn,
 	(	integer(Val)
 	->	Type=integer
 	;	Type=float).
-do_formula(Context, Comparison, (text, Val)) :- Comparison =.. [Op, A, B],
-	member(Op, [==,\=,<,>,=<,>=,=:=,lt,gt,leq,geq,eq,neq]), !,
-	(	do_formula(Context, A, (_, LA)),
-		do_formula(Context, B, (_, LB)),
-	(	number(LA), number(LB)
-	;	throw('Numbers expected':Comparison)),
-		Exp =.. [Op, LA, LB],
-		(	call(Exp)
-		->	Val = true
-		;	Val = false)).
+
 do_formula(Context, Logic, (text, Val)) :- Logic =.. [Op, A, B],
-	member(Op, [';',',']), !,
+	member(Op, [',',';']), !,
 	(	do_formula(Context, A, (text, LA)),
 		do_formula(Context, B, (text, LB)),
 		Exp =..[Op, LA, LB],
 		simple_logic(Exp, Val)
 		;	throw('Bad logic function':Logic)).
+
+do_formula(Context, Fn, (text, Val)) :- Fn =.. [Op|Args], !,
+	(	maplist(do_formula(Context), Args, ArgTuples),
+		maplist(var_val, ArgTuples, Values),
+		Exp =.. [Op|Values],
+		(	call(Exp)
+		->	Val = true
+		;	Val = false)).
 do_formula(_, F, _) :- writeln('Bad formula':F), !, fail.
+
+var_val((_, Val), Val).
 
 simple_logic((false;false), false).
 simple_logic((_;_), true).

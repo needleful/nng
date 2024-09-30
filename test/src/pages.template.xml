@@ -1,14 +1,17 @@
 <templates>
 	<template name='page'>
-		<param name='numbers' type='list'>
-			<param name='number' type='integer'/>
-		</param>
+		<param name='number' type='integer'/>
 		<content>
-			<ul>
-				<foreach list='numbers'>
-					<li>[[number+1]] [[number*number-1]] [[lt(number, 1); gt(number, 5)]] [[gt(number, 0), lt(number, 5)]]</li>
-				</foreach>
-			</ul>
+			<match val='src_file_exists("index[[number-1]].page.xml")'>
+				<true>
+					<a href='index[[number-1]].html'>Previous</a>
+				</true>
+			</match>
+			<match val='src_file_exists("index[[number+1]].page.xml")'>
+				<true>
+					<a href='index[[number+1]].html'>Next</a>
+				</true>
+			</match>
 		</content>
 	</template>
 </templates>
