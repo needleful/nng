@@ -39,6 +39,8 @@ h_gen_files(SourceDir, OutDir, [S|Files]) :-
 		atom_concat(Name, '.html', OFile),
 		!,
 		directory_file_path(OutDir, OFile, OPath),
-		(	process_file(SPath, OPath)
-		;	writeln('Skipping'))),
+		catch_with_backtrace(
+			process_file(SPath, OPath),
+			Error,
+			print_message(error, Error))),
 	h_gen_files(SourceDir, OutDir, Files).

@@ -7,6 +7,7 @@
 :- use_module(library(assoc)).
 :- use_module(library(filesex)).
 :- use_module(library(lists)).
+:- use_module(library(prolog_stack)).
 :- use_module(library(pprint)).
 :- use_module(library(sgml)).
 
@@ -23,13 +24,15 @@ processor(match).
 processor(let).
 processor(when).
 
+err(Term, Message) :- throw(error(Term, context(_, Message))).
+
 default_var(text, '').
 default_var(date, 0).
 default_var(file, '.').
 default_var(Number, 0) :- Number=float; Number=integer.
 default_var(List, []) :- List=list(_,_);List=markdown;List=xml.
 default_var(struct(_), Empty) :- empty_assoc(Empty). 
-default_var(Type, _) :- throw('Unknown type':Type).
+default_var(Type, _) :- err(Type,'Unknown type').
 
 load_templates(SourceDir) :-
 	retractall(template(_, _, _)),
@@ -41,8 +44,7 @@ load_templates_h([]).
 load_templates_h([A|T]) :- 
 	(	load_xml(A, [XML], [space(remove)]),
 		read_template_xml(XML)
-	;	(	writeln('Failed to parse template':A), 
-			fail)),
+	;	err(A, 'Failed to parse template')),
 	load_templates_h(T).
 
 read_template_xml(element(templates, _, Content)) :- !,
@@ -54,10 +56,7 @@ read_template_xml(element(template, [name=TempName], Content)) :- !,
 	->	writeln(template:TempName),
 		assert(Template)
 	;	writeln('Failed to parse template':TempName), fail).
-read_template_xml(Other) :-
-	writeln('Invalid Template XML:'),
-	print_term(Other, [indent_arguments(3)]),
-	fail.
+read_template_xml(Other) :- err(Other, 'Invalid Template XML').
 
 read_params([], T, T).
 read_params([element(param, Attributes, PC)|Tail], template(TName, Params, Content), Template) :-
@@ -69,18 +68,16 @@ read_params([element(content, _, Content)|Tail], template(TName, P, []), Templat
 
 check_param(Attributes, Content, Param) :-
 	h_check_param_attr(Attributes, ('', '', true), P),
-	(	valid_param(P),
-		check_param_type(P, Content, Param)
-	;	(	writeln('Invalid parameter':P), 
-			fail)).
+	(	valid_param(P)
+	->	check_param_type(P, Content, Param)
+	;	err(P, 'Invalid parameter')).
 
 h_check_param_attr([], P, P).
 h_check_param_attr([name=Name|List], ('', T, R), Param) :- !, 
 	(	read_term_from_atom(Name, Var, [double_quotes(string)]),
 		atom(Var)
 	->	h_check_param_attr(List, (Name, T, R), Param)
-	;	(	writeln('Parameter names should be simple Prolog atoms':Name),
-			fail)).
+	;	err(Name, 'Parameter names should be simple Prolog atoms')).
 h_check_param_attr([type=Type|List], (N, '', R), Param) :- !,
 	h_check_param_attr(List, (N, Type, R), Param).
 h_check_param_attr([required=Required|List], (N, T, true), Param) :- !,
@@ -109,7 +106,7 @@ process_file(SFile, OFile) :-
 		access_file(OFile, write),
 		load_xml(SFile, SourceXml, [space(remove)]),
 		process_xml(SourceXml, OutHtml)
-	;	writeln('Failed to process file':SFile), fail),
+	;	err(SFile, 'Failed to process file')),
 	!,
 	(	writeln('Writing to':OFile),
 		open(OFile, write, Stream, []),
@@ -133,15 +130,14 @@ process(Context, [element(Name, Attribs, Content)|XML], WorkingSet, Result) :-
 		pdo(Process, NodeResult)
 	;	template(Name, _, _), !,
 		tdo(Name, Context, Content, NodeResult)
-	;	(	(	process(Context, Content, [], SubResult)
-			;	writeln('Processing element failed':element(Name, Attrib2)), 
-				fail),
-		NodeResult = [element(Name, Attrib2, SubResult)])),
+	;	(	process(Context, Content, [], SubResult),
+			NodeResult = [element(Name, Attrib2, SubResult)]
+		;	err(element(Name, Attrib2, Content), 'Processing element failed'))),
 	append(WorkingSet, NodeResult, NewWorkingSet),
 	process(Context, XML, NewWorkingSet, Result).
 process(Context, [Atom|XML], WorkingSet, Result) :- !, atom(Atom),
 	(	text_process(Context, Atom, Replaced), !
-	;	writeln('Text replacement failed':Atom)),
+	;	err(Atom, 'Text replacement failed')),
 	(	Replaced=[_|_], NodeResult=Replaced, !
 	;	NodeResult=[Replaced]),
 	append(WorkingSet, NodeResult, NewWorkingSet),
@@ -153,24 +149,34 @@ tdo(Template, Context, Args, Result) :-
 	fill_params(Args, Params, Vars),
 	assoc_to_list(Vars, VarList),
 	(	def_vars(Context, VarList, LocalContext), !
-	;	(	writeln('Problem defining variables'), 
-			fail)),
+	;	throw('Problem defining variables')),
 	(	process(LocalContext, TemplateContent, [], Result), !
-	;	(	writeln('Processing template failed':Template), 
-			fail)).
+	;	err(Template, 'Processing template failed')).
 
 pdo(foreach(Context, [list=ListName], Content), Result) :- !,
+	pdo(foreach(Context, [list=ListName,i=idx_], Content), Result).
+pdo(foreach(Context, [list=ListName,i=IndexName], Content), Result) :- !,
 	do_formula(Context, ListName, (Type, List)),
 	(	Type=list(KeyName, SubType), !
-	;	(	writeln('Expected a list':ListName=Type), 
-			fail)),
-	maplist(process_list_item(KeyName, Context, Content, SubType), List, NestedResult),
+	;	err(ListName=Type, 'Expected a list')),
+	indeces(List, Indeces),
+	maplist(process_list_item(KeyName, Context, Content, SubType, IndexName), List, Indeces, NestedResult),
 	flatten(NestedResult, Result).
+pdo(foreach(C, [i=I, list=L], C), R) :-
+	pdo(foreach(C, [list=L, i=I], C), R).
+
 pdo(match(Context, [val=VText], Content), Result) :- !,
 	read_term_from_atom(VText, Formula, [double_quotes(string)]),
 	do_formula(Context, Formula, (text, Match)),
 	match_(Context, Match, Content, [], Result).
-pdo(Other, _) :- !, writeln('Unknown processor':Other), fail.
+pdo(Other, _) :- !, err(Other, 'Unknown processor').
+
+indeces(L, I) :-
+	indeces_(L, 1, I).
+indeces_([], _, []).
+indeces_([_|Tail], C, [C|ITail]) :- 
+	Cp1 is C+1,
+	indeces_(Tail, Cp1, ITail).
 
 match_(_,_,[], WorkingSet, WorkingSet).
 match_(Context, Match, [element(Match, _, Content)|Tail], WorkingSet, Result) :-
@@ -179,10 +185,11 @@ match_(Context, Match, [element(Match, _, Content)|Tail], WorkingSet, Result) :-
 	match_(Context, Match, Tail, NewSet, Result).
 match_(C,M,[_|T],S,R) :- match_(C,M,T,S,R).
 
-process_list_item(Key, Context, Content, Type, Item, Result) :-
+process_list_item(Key, Context, Content, Type, IndexName, Item, Index, Result) :-
 	put_assoc(Key, Context, (Type, Item), ItemContext),
-	(	process(ItemContext, Content, [], Result)
-	;	throw('Bad list item':Item)).
+	put_assoc(IndexName, ItemContext, (integer, Index), FullContext),
+	(	process(FullContext, Content, [], Result)
+	;	err(Item, 'Bad list item')).
 
 fill_params(Args, Params, Vars) :-
 	empty_assoc(EmptyVars),
@@ -207,33 +214,32 @@ add_defaults([Name-(Type, false)|Tail], Defined, Vars) :-
 add_defaults([Name-(Type, true)|Tail], Defined, Vars) :-
 	get_assoc(Name, Defined, _), !,
 	add_defaults(Tail, Defined, Vars)
-	;	(	writeln('Missing required argument':(Name, Type)),
-			fail).
+	;	err((Name, Type), 'Missing required argument').
 
-parse_arg(xml, X, X) :- !.
-parse_arg(markdown, M, M) :- !.
-parse_arg(integer, [I], Int) :- !, atom_number(I, Int), integer(Int).
-parse_arg(float, [F], Float) :- !, atom_number(F, Float).
-parse_arg(file, [F], F) :- atom(F), !.
-parse_arg(text, [T], T) :- atom(T), !.
+parse_arg(xml, X, X).
+parse_arg(markdown, M, M).
+parse_arg(integer, [I], Int).
+parse_arg(float, [F], Float).
+parse_arg(file, [F], F).
+parse_arg(text, [T], T).
 parse_arg(list(_, EType), Args, Values) :- !, maplist(parse_list_arg(EType), Args, Values).
 parse_arg(struct(Fields), Args, Values) :- !,
 	empty_assoc(Defined),
 	parse_struct_args(Fields, Defined, Args, Values).
-parse_arg(Type, Value, _) :- writeln('Could not process var':Type=Value), !, fail.
+parse_arg(Type, Value, _) :- err(Type=Value, 'Could not process var').
 
 parse_list_arg(Type, element(_, _, A), V) :- parse_arg(Type, A, V).
 
 parse_struct_args(Fields, Defined, [], Defined) :-
 	assoc_to_list(Defined, DefList),
 	remove_keys(Fields, DefList, Undefined),
-	(	empty_assoc(Undefined), !
+	(	empty_assoc(Undefined)
 	;	assoc_to_list(Undefined, UndefList),
 		(	maplist(=(_-(_, _, false)), UndefList), !
-		;	writeln('Missing fields in struct':UndefList), fail)).
+		;	err(UndefList, 'Missing fields in struct'))).
 parse_struct_args(Fields, Defined, [element(Name, _, Value)|Tail], Values) :-
 	(	\+get_assoc(Name, Defined, _), !
-	;	writeln('Duplicate struct field':Name), fail),
+	;	err('Duplicate struct field':Name), fail),
 	get_assoc(Name, Fields, (Type, _)),
 	parse_arg(Type, Value, Parsed),
 	put_assoc(Name, Defined, (Type, Parsed), Defined2),
@@ -263,11 +269,11 @@ def_var_h(Context, struct(_), Data, ParsedData) :-
 	assoc_to_list(Data, DataList),
 	maplist(def_struct_item(Context), DataList, ParseList),
 	list_to_assoc(ParseList, ParsedData).
-def_var_h(_, Type, Data, _) :- writeln('Could not define args':(Type, Data)), fail.
+def_var_h(_, Type, Data, _) :- err((Type, Data), 'Could not define args').
 
 def_struct_item(Context, Name-(Type, Data), Name-(Type, Parsed)) :-
 	def_var_h(Context, Type, Data, Parsed)
-	;	(writeln('Failed to define struct field':(Name, Type, Data)), fail).
+	;	err((Name, Type, Data), 'Failed to define struct field').
 
 attrib_process(Context, Attrib, Result) :-
 	maplist(h_attrib_process(Context), Attrib, Result).
@@ -277,16 +283,15 @@ h_attrib_process(C, A=V, A2=V2) :-
 
 text_process(_, '', '').
 text_process(Context, Text, Result) :-
-	(	extract(Text, BeforeMatch, '[[', F, ']]', AfterMatch),
-		!,
-		read_term_from_atom(F, Exp, [double_quotes(string)]),
-		do_formula(Context, Exp, (_, Replaced)),
-		(	atomic(Replaced)
-		->	make_atom(Replaced, RText)
-		;	RText=Replaced),
-		text_process(Context, AfterMatch, Processed),
-		xml_merge([BeforeMatch, RText, Processed], Result))
-	;	Result = Text.
+	(	extract(Text, BeforeMatch, '[[', F, ']]', AfterMatch)
+	->	(	read_term_from_atom(F, Exp, [double_quotes(string)]),
+			do_formula(Context, Exp, (_, Replaced)),
+			(	atomic(Replaced)
+			->	make_atom(Replaced, RText)
+			;	RText=Replaced),
+			text_process(Context, AfterMatch, Processed),
+			xml_merge([BeforeMatch, RText, Processed], Result))
+	;	Result = Text).
 
 % Replacements for Comparison operators
 % Maybe someday I can get them working with read_term_from_atom
@@ -317,7 +322,7 @@ do_formula(_, N, (float, N)) :- float(N).
 do_formula(_, S, (text, A)) :- string(S), string_to_atom(S, A).
 do_formula(Context, F, Value) :- atom(F), !,
 	(	get_assoc(F, Context, Value), !
-		; 	throw('Missing variable':F=>{Context})).
+		; 	err(F=>{Context}, 'Missing variable')).
 do_formula(Context, Struct:Field, Val) :- !,
 	do_formula(Context, Struct, (_, S)),
 	(	do_formula(S, Field, Val), !
@@ -328,7 +333,7 @@ do_formula(Context, Math, (Type, Val)) :- Math =.. [Op, A, B],
 	do_formula(Context, A, (_, NA)), do_formula(Context, B, (_, NB)),
 	Fn =.. [Op, NA, NB],
 	(	number(NA), number(NB)
-	;	throw('Numbers expected':Fn)),
+	;	err(Fn, 'Numbers expected')),
 	Val is Fn,
 	(	integer(Val)
 	->	Type=integer
@@ -340,7 +345,7 @@ do_formula(Context, Logic, (text, Val)) :- Logic =.. [Op, A, B],
 		do_formula(Context, B, (text, LB)),
 		Exp =..[Op, LA, LB],
 		simple_logic(Exp, Val)
-		;	throw('Bad logic function':Logic)).
+		;	err(Logic, 'Bad logic function')).
 
 do_formula(Context, Fn, (text, Val)) :- Fn =.. [Op|Args], !,
 	(	maplist(do_formula(Context), Args, ArgTuples),
@@ -349,7 +354,7 @@ do_formula(Context, Fn, (text, Val)) :- Fn =.. [Op|Args], !,
 		(	call(Exp)
 		->	Val = true
 		;	Val = false)).
-do_formula(_, F, _) :- writeln('Bad formula':F), !, fail.
+do_formula(_, F, _) :- err(F, 'Bad formula').
 
 var_val((_, Val), Val).
 
@@ -358,7 +363,7 @@ simple_logic((_;_), true).
 simple_logic((true,true), true).
 simple_logic((_,_), false).
 
-simple_logic(Other, _) :- throw('Unknown logic expression':Other).
+simple_logic(Other, _) :- err(Other, 'Unknown logic expression').
 
 make_atom(A, A) :- atom(A).
 make_atom(N, A) :- number(N), atom_number(A, N).
