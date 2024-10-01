@@ -1,10 +1,9 @@
 :- module(library, [
-	src_file_exists/1,
-	'::'/2
+	src_file_exists/1
 	]).
 
 :- use_module(library(filesex)).
-:- use_module(compiler).
+:- use_module(common).
 
 % For type annotations
 :- op(1090, xfx, '::').

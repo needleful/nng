@@ -1,0 +1,17 @@
+<template name='simple-types'>
+	<param name='use_cool' type='boolean'/>
+	<param name='count' type='integer'/>
+	<param name='yourName' type='text'/>
+	<param name='content' type='xml'/>
+	<content>
+		<html>
+			<head>
+				<title>We're [[use_cool]]ly cool.</title>
+			</head>
+			<body>
+				<p>Yeh [[yourName]] might be cool. The statement was asserted to be [[use_cool]] [[count]] time(s).</p>
+				[[content]]
+			</body>
+		</html>
+	</content>
+</template>

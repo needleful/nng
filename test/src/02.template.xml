@@ -1,0 +1,6 @@
+<template name='with-params'>
+	<param name='hello'/>
+	<content>
+		<o>Hello, [[hello]]!</o>
+	</content>
+</template>

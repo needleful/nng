@@ -19,7 +19,8 @@ compile_template(element(templates, _, Templates)) :-
 compile_template(element(template, [name=Name], Content)) :-
 	empty_assoc(Empty),
 	compile_params(Content, (Empty, InputDef), ContentNodes),
-	maplist(compile_code(InputDef), ContentNodes, Code),
+	compile_xml(InputDef, ContentNodes, Code),
+	retractall(template_defined(Name, _, _)),
 	assert(template_defined(Name, InputDef, Code)).
 
 %%% Parameter compilation
@@ -39,7 +40,7 @@ param_info(InAssoc, Attribs, Nodes, PName-(Type,Required,Default)) :-
 		'No name given to parameter'),
 	expect(\+get_assoc(PName, InAssoc, _),
 		'Duplicate parameter':PName),
-	type(Type),
+	type(Type), !,
 	(	Required=true
 	->	expect(Default=[], 
 			'Defining "default" on required parameter is redundant':PName)
@@ -71,6 +72,17 @@ get_full_type(struct, Elements, struct(Assoc)) :-
 
 %%% Code compilation
 
+compile_xml(Input, Body, Code) :-
+	compile_xml(Input, Body, [], Code).
+compile_xml(_,[],Code,Code).
+compile_xml(Input,[Node|Body],Working,Code) :-
+	is_list(Working),
+	compile_code(Input, Node, NodeResult),
+	(	NodeResult = [_|_]
+	->	append(Working, NodeResult, Working2)
+	;	append(Working, [NodeResult], Working2)),
+	compile_xml(Input, Body, Working2, Code).
+
 compile_code(Input, A, Code) :- atom(A),
 	compile_text(Input, A, Code, any).
 
@@ -79,7 +91,7 @@ compile_code(Input, element(E, Attribs, Xml), Code) :-
 	(	processor(E)
 	->	compile_processor(Input, E, CAttr, Xml, Processor),
 		Code=processor(Processor)
-	;	maplist(compile_code(Input), Xml, SubCode),
+	;	compile_xml(Input, Xml, SubCode),
 		Code=element(E,CAttr,SubCode)).
 
 compile_attribs(_,[],C,C).
@@ -97,8 +109,11 @@ compile_text(Input, A, Code, Allowed) :- atom(A), atom(Allowed),
 		->	ThisCode=insert_text(Type, Formula)
 		;	xml_type(Type),
 			ThisCode=insert_xml(Formula)),
-		compile_text(Input, After, AfterCode),
-		exclude(=(''), [Before, ThisCode, AfterCode], Code)
+		compile_text(Input, After, AfterCode, Allowed),
+		(	AfterCode=[_|_]
+		->	append([Before, ThisCode], AfterCode, NewCode)
+		;	NewCode=[Before, ThisCode, AfterCode]),
+		exclude(=(''), NewCode, Code)
 	;	Code=A).
 
 compile_formula(Input, Text, (Type, Formula)) :-
@@ -109,13 +124,16 @@ typecheck(_, I, integer) :- integer(I).
 typecheck(_, N, integer) :- number(N).
 typecheck(_, S, text) :- string(S).
 typecheck(Input, A, Type) :- atom(A),
-	get_assoc(A, Input, Type).
+	get_assoc(A, Input, (Type,_,_)).
 typecheck(Input, Struct:Field, Type) :- atom(Struct),
-	get_assoc(Input, Struct, struct(Fields)),
+	% Recursive structs
+	(	Input=struct(Types)
+	->	get_assoc(Types, Struct, Fields)
+	;	get_assoc(Input, Struct, (struct(Fields),_,_))),
 	(	atom(Field)
 	->	get_assoc(Fields, Field, Type)
 	;	Field=Outer:Inner,
-		typecheck(Fields, Outer:Inner, Type)).
+		typecheck(struct(Fields), Outer:Inner, Type)).
 typecheck(Input, Fn, Type) :- Fn=..[Op|Args],
 	maplist(typecheck(Input), Args, ArgTypes),
 	cond([
@@ -130,7 +148,7 @@ typecheck(Input, Fn, Type) :- Fn=..[Op|Args],
 		; (
 			% Library functions have a special ::/2 signature for return types
 			FnSig=..[Op|ArgTypes],
-			::(FnSig, Type)
+			library:'::'(FnSig, Type)
 		)
 	]).
 
