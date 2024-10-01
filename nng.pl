@@ -1,3 +1,4 @@
+#!/usr/bin/env swipl
 :- module(nng, [
 	generate/2]).
 
@@ -7,14 +8,30 @@
 :- use_module(library(sgml)).
 :- use_module(library(sgml_write)).
 
+:- use_module(common).
+:- use_module(compiler).
 :- use_module(templates).
+
+:- initialization(main, main).
+
+main([]) :-
+	generate('test/src', 'test/www').
+
+main([InFolder, OutFolder]) :-
+	generate(InFolder, OutFolder).
 
 generate(Source, Out) :-
 	(	load_templates(Source)
 	;	writeln('Failed to generate templates.'), fail),
 	!,
-	writeln('%-----TEMPLATES GENERATED-----%').
-	%, gen_dir(Source, Out).
+	writeln('%-----TEMPLATES GENERATED-----%'), 
+	gen_dir(Source, Out).
+
+load_templates(SourceDir) :-
+	retractall(template_defined),
+	atom_concat(SourceDir, '/*.template.xml', TSource),
+	expand_file_name(TSource, TFiles),
+	maplist(compile_file, TFiles).
 
 gen_dir(SourceDir, OutDir) :-
 	writeln(dir:SourceDir->OutDir),
@@ -39,7 +56,26 @@ h_gen_files(SourceDir, OutDir, [S|Files]) :-
 		!,
 		directory_file_path(OutDir, OFile, OPath),
 		catch_with_backtrace(
-			process_file(SPath, OPath),
+			gen_file(SPath, OPath),
 			Error,
 			print_message(error, Error))),
 	h_gen_files(SourceDir, OutDir, Files).
+
+gen_file(SFile, OFile) :-
+	(	writeln(in:SFile->out:OFile),
+		b_setval(current_source, SFile),
+		exists_file(SFile),
+		access_file(OFile, write),
+		load_xml(SFile, SourceXml, [space(remove)]),
+		generate_page(SourceXml, OutHtml)
+	;	err(SFile, 'Failed to process file')),
+	!,
+	(	writeln('Writing to':OFile),
+		open(OFile, write, Stream, []),
+		writeln(Stream, '<!DOCTYPE html>'),
+		html_write(Stream, OutHtml, [
+			header(false), layout(false)]),
+		!,
+		(	close(Stream)
+		;	writeln('The file didn\'t close?'))
+	;	print_term('Failed to write':OutHtml, [quoted(true)])).

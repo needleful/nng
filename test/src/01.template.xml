@@ -1,0 +1,5 @@
+<template name='minimal'>
+	<content>
+		<o>Hello</o>
+	</content>
+</template>
