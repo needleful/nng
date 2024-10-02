@@ -7,7 +7,7 @@
 	convert_arg/3,
 	to_atom/3,
 	exp_type/2,
-	cond/1,
+	common_type/2,
 	err/2,
 	expect/2
 	]).
@@ -29,6 +29,14 @@ type(xml).
 
 any(_).
 
+convertible(T, T).
+convertible(number, text).
+convertible(integer, number).
+convertible(date, text).
+convertible(file, text).
+convertible(boolean, text).
+convertible(A, C) :- convertible(A, B), convertible(B, C).
+
 atomic_type(T) :- T=text;T=date;T=file;T=boolean;T=number;T=integer.
 xml_type(T) :- T=xml;T=markdown.
 numeric_type(T) :- T=number;T=integer.
@@ -46,6 +54,14 @@ convert_arg(El, struct(Assoc), R) :-
 	validate_inputs(Assoc, El, R).
 convert_arg(X, T, X) :- T=xml;T=markdown.
 
+common_type([A|T], C) :-
+	common_type(A, T, C).
+common_type(A, [], A).
+common_type(A, [B|T], C) :-
+	convertible(A, TC),
+	convertible(B, TC),
+	common_type(TC, T, C).
+
 to_atom(A, T, A) :- T=text;T=date;T=file;T=boolean.
 to_atom(N, T, A) :- (T=number;T=integer), atom_number(A, N).
 
@@ -62,17 +78,6 @@ exp_type(Op, math) :- member(Op,
 		powm,lgamma,erf,erfc,pi,e,epsilon,inf,nan,cputime]).
 
 exp_type(Op, logic) :- member(Op, [';',',','->','\\+']).
-
-cond([]) :- fail.
-cond([A->B;C]) :-
-	(	call(A)
-	->	call(B)
-	;	call(C)).
-
-cond([A->B|Tail]) :-
-	(	call(A)
-	->	call(B)
-	;	cond(Tail)).
 
 err(Term, Message) :- 
 	throw(error(Term, Message)).

@@ -11,17 +11,17 @@
 
 compile_file(File) :-
 	load_xml(File, [XML], [space(remove)]),
-	compile_template(XML).
+	compile_template(XML), !.
 
 compile_template(element(templates, _, Templates)) :-
-	maplist(compile_template(Templates)).
+	maplist(compile_template, Templates).
 
 compile_template(element(template, [name=Name], Content)) :-
 	empty_assoc(Empty),
 	compile_params(Content, (Empty, InputDef), ContentNodes),
 	compile_xml(InputDef, ContentNodes, Code),
 	retractall(template_defined(Name, _, _)),
-	assert(template_defined(Name, InputDef, Code)).
+	assert(template_defined(Name, InputDef, Code)), !.
 
 %%% Parameter compilation
 
@@ -64,11 +64,12 @@ param_attrib([required=R|X], Xml, N-(T,R,D)) :-
 param_attrib([default=D|X], Xml, N-(T,R,D)) :-
 	param_attrib(X, Xml, N-(T,R,D)).
 
-get_full_type(list, [element(Name, Attribs, Content)], list(Name, SubType)) :-
-	param_info(Attribs, Content, Name-(SubType,_,_)).
+get_full_type(list, [element(param, Attribs, Content)], list(EName, SubType)) :-
+	empty_assoc(Empty),
+	param_info(Empty, Attribs, Content, EName-(SubType,_,_)).
 get_full_type(struct, Elements, struct(Assoc)) :-
 	empty_assoc(Empty),
-	compile_params(Elements, Empty, (Empty, Assoc), []). 
+	compile_params(Elements, (Empty, Assoc), []).
 
 %%% Code compilation
 
@@ -118,39 +119,58 @@ compile_text(Input, A, Code, Allowed) :- atom(A), atom(Allowed),
 
 compile_formula(Input, Text, (Type, Formula)) :-
 	read_term_from_atom(Text, Formula, [double_quoted(string)]),
-	typecheck(Input, Formula, Type).
+	expect(compiler:typecheck(Input, Formula, Type),
+		'Bad formula':{Formula}).
 
+constant(true, boolean).
+constant(false, boolean).
 typecheck(_, I, integer) :- integer(I).
 typecheck(_, N, integer) :- number(N).
 typecheck(_, S, text) :- string(S).
 typecheck(Input, A, Type) :- atom(A),
-	get_assoc(A, Input, (Type,_,_)).
-typecheck(Input, Struct:Field, Type) :- atom(Struct),
-	% Recursive structs
-	(	Input=struct(Types)
-	->	get_assoc(Types, Struct, Fields)
-	;	get_assoc(Input, Struct, (struct(Fields),_,_))),
-	(	atom(Field)
-	->	get_assoc(Fields, Field, Type)
-	;	Field=Outer:Inner,
-		typecheck(struct(Fields), Outer:Inner, Type)).
-typecheck(Input, Fn, Type) :- Fn=..[Op|Args],
-	maplist(typecheck(Input), Args, ArgTypes),
-	cond([
-		exp_type(Op, math) -> (
-			maplist(numeric_type, ArgTypes),
-			(	member(number, ArgTypes)
-			->	Type=number
-			;	Type=integer)),
-		exp_type(Op, logic) -> (
-			maplist(=(boolean), ArgTypes),
-			Type=boolean)
-		; (
-			% Library functions have a special ::/2 signature for return types
-			FnSig=..[Op|ArgTypes],
-			library:'::'(FnSig, Type)
-		)
-	]).
+	typecheck_get(root, Input, A, Type).
+typecheck(Input, Base:Field, Type) :-
+	typecheck_access(root, Input, Base:Field, Type).
+typecheck(Input, A->B;C, Type) :-
+	typecheck(Input, A, boolean),
+	typecheck(Input, B, TypeB),
+	typecheck(Input, C, TypeC),
+	common_type([TypeB, TypeC], Type).
+typecheck(Input, Fn, Type) :- Fn=..[Op, A1|Args], Op \= ':',
+	maplist(typecheck(Input), [A1|Args], ArgTypes),
+	typecheck_fn(Op, OpType),
+	typecheck_call(OpType, Op, ArgTypes, Type).
+
+typecheck_access(IType, Input, Base:Field, Type) :-
+	typecheck_get(IType, Input, Base, BaseType),
+	typecheck_access(BaseType, Input, Field, Type).
+typecheck_access(IType, Input, Field, Type) :- Field \= _:_,
+	typecheck_get(IType, Input, Field, Type).
+
+typecheck_get(root, Input, Name, Type) :- atom(Name), 
+	(	constant(Name, Type), !
+	;	expect(get_assoc(Name, Input, (Type,_,_)),
+			'No variable found':Name)).
+typecheck_get(struct(Types), _, Name, Type) :-
+	expect(atom(Name), 'Invalid struct field name':Name),
+	expect(get_assoc(Name, Types, (Type,_,_)),
+		'Field not found':Name).
+typecheck_get(list(_, EType), Input, Formula, EType) :- !,
+	typecheck(Input, Formula, T),
+	expect(T=integer, 'List expected an integer index, got':(T, Formula)).
+typecheck_get(Type,_,F,_) :- atom(Type), type(Type),
+	format('Tried to get field {~w} on a variable of type {~w}~n', [F, Type]),
+	fail.
+
+typecheck_call(math, _, ArgTypes, Type) :- maplist(numeric_type, ArgTypes),
+	common_type(ArgTypes, Type).
+typecheck_call(logic, _, ArgTypes, boolean) :- maplist(=(boolean), ArgTypes).
+typecheck_call(func, Op, ArgTypes, Type) :-
+	FnSig=..[Op|ArgTypes],
+	library:'::'(FnSig, Type).
+
+typecheck_fn(Op, Type) :- exp_type(Op, Type), !.
+typecheck_fn(_, func).
 
 processor(foreach).
 processor(match).

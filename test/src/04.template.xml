@@ -1,0 +1,21 @@
+<templates>
+	<template name='list-example'>
+		<param name='list1' type='list'>
+			<param name='item' type='number'/>
+		</param>
+		<content>
+			<item id='[[list1:1]]'/>
+			<item id='[[list1:1+1]]'/>
+		</content>
+	</template>
+	<template name='struct-example'>
+		<param name='struct1' type='struct'>
+			<param name='id' type='integer'/>
+			<param name='content' type='xml'/>
+		</param>
+		<content>
+			<p>Hello user #[[(struct1:id) + 1]]. Here is your content:</p>
+			[[struct1:content]]
+		</content>
+	</template>
+</templates>
