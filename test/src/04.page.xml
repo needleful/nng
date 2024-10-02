@@ -1,0 +1,27 @@
+<!-- This one also tests embedding templates within a document -->
+<!-- Templates with one argument are verbose -->
+<body>
+	<list-example>
+		<list1>
+			<item>12</item>
+			<item>201</item>
+			<item>772288</item>
+		</list1>
+	</list-example>
+	<struct-example>
+		<struct1>
+			<id>24600</id>
+			<content>
+				<p>I have deemed you worthy of embedding.</p>
+				<struct-example>
+					<struct1>
+						<id>1</id>
+						<content>
+							<div id='div2'>Hullo</div>
+						</content>
+					</struct1>
+				</struct-example>
+			</content>
+		</struct1>
+	</struct-example>
+</body>

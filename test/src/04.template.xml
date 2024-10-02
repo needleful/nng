@@ -4,7 +4,7 @@
 			<param name='item' type='number'/>
 		</param>
 		<content>
-			<item id='[[list1:1]]'/>
+			<item id='[[list1:0]]'/>
 			<item id='[[list1:1+1]]'/>
 		</content>
 	</template>

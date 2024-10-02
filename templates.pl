@@ -6,6 +6,7 @@
 
 :- use_module(library(assoc)).
 :- use_module(library(lists)).
+:- use_module(library(pprint)).
 :- use_module(common).
 :- use_module(library).
 
@@ -28,10 +29,10 @@ validate_inputs(InputDef, XML, InAssoc) :-
 
 validate_in(_, [], Defined, Defined).
 validate_in(InputDef, [element(Name, _, Content)|Tail], Defined, Filled) :-
-	expect(\+ get_assoc(Name, Defined, _),
-		'Duplicate argument':Name),
 	expect(get_assoc(Name, InputDef, (Type, _, _)), 
 		'Unexpected argument':Name),
+	expect(\+ get_assoc(Name, Defined, _),
+		'Duplicate argument':Name),
 	expect(templates:convert_arg(Content, Type, Value), 
 		'Type conversion failed':Name->Type:{Content}),
 	put_assoc(Name, Defined, Value, Defined2),
@@ -45,7 +46,7 @@ convert_arg(El, list(Name, SubType), R) :-
 convert_arg(El, struct(Assoc), R) :-
 	validate_inputs(Assoc, El, R).
 convert_list_item(Name, SubType, element(Name, _, Content), Result) :-
-	convert_text(Content, SubType, Result).
+	convert_arg(Content, SubType, Result).
 
 apply_defaults([], Defined, Defined).
 apply_defaults([Name-(_, Required, Default)|Tail], Defined, InAssoc) :-
@@ -75,18 +76,30 @@ apply_node(Vars, processor(Code), NodeXml) :-
 	process(Code, Vars, NodeXml).
 
 apply_node(Vars, insert_text(Type, Formula), [Result]) :-
-	evaln(Vars, Formula, Data),
+	expect(templates:evaln(Vars, Formula, Data),
+		'Bad formula':Formula),
 	to_atom(Data, Type, Result).
 
 apply_node(Vars, insert_xml(Formula), Result) :-
 	evaln(Vars, Formula, Result).
 
+apply_node(_,Node,_) :- writeln('Failed to apply node'),
+	print_term(Node, []),
+	nl,
+	fail.
+
 apply_attribs(Vars, A, A2) :-
-	maplist(apply_attr_(Vars), A, A2).
+	maplist(apply_attr(Vars), A, A2).
 
 apply_attr(Vars, Key=Value, Key2=Value2) :-
-	apply_node(Vars, Key, Key2),
-	apply_node(Vars, Value, Value2).
+	apply_text_field(Vars, Key, Key2),
+	apply_text_field(Vars, Value, Value2).
+apply_text_field(Vars, [A|Tail], Result) :-
+	maplist(apply_node(Vars), [A|Tail], List),
+	flatten(List, Flat),
+	atomic_list_concat(Flat, Result).
+apply_text_field(Vars, A, Result) :-
+	apply_node(Vars, A, [Result]).
 
 process(foreach(ListName, Key, Index, Content), Vars, NodeXml) :-
 	evaln(Vars, ListName, List),
@@ -113,6 +126,7 @@ process_match(Vars, Match,[E|Tail],Xml,Result) :-
 	process_match(Vars, Match, Tail, Xml2, Result).
 
 evaln(_, quote(A), A).
+evaln(_, N, N) :- number(N).
 evaln(Vars, F, Value) :- atom(F), !,
 	get_assoc(F, Vars, Value).
 evaln(Vars, text(List), Result) :- 

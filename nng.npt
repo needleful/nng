@@ -16,15 +16,20 @@ m3
 		- match
 			p0
 			i5
+		- foreach (again)
+			p0
+			i14
 	- Expressions
 		p0
 		i6
 		- math
 			p0
 			i7
+			x
 		- file existence
 			p0
 			i8
+			x
 		- struct fields
 			p0
 			i9
@@ -40,3 +45,12 @@ m3
 	- Default arguments
 		p0
 		i13
+		x
+	- Tiny templates
+		p0
+		i15
+		/Instead of
+		/<my-template><var>Value</var></my-template>
+		/I should be able to use
+		/<my-template>Value</my-template>
+		/For single-variable templates.

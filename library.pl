@@ -25,10 +25,10 @@ src_file_exists(RelPath) :- atom(RelPath),
 :-op(700, xfx, eq).
 :-op(700, xfx, neq).
 
-X :: boolean :- X=..[Op,A,B],
+X :: boolean :- X=..[Op,A,B], 
+	member(Op, [lt,leq,gt,geq,eq,neq]),
 	numeric_type(A),
-	numeric_type(B),
-	member(Op, [lt,leq,gt,geq,eq,neq]).
+	numeric_type(B).
 
 A lt B :- A<B.
 A leq B :- A =< B. 
