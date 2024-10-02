@@ -54,3 +54,13 @@ m3
 		/I should be able to use
 		/<my-template>Value</my-template>
 		/For single-variable templates.
+	- Better error messages
+		p0
+		i26
+		/A lot of time it just fails. It's an active effort at the moment.
+- Spacing
+	p0
+	i23
+	/Do I want to preserve the original spacing?
+	/I basically have to for code blocks, but how often do I use them?
+	/Keeping the whitespace makes everything more annoying.
