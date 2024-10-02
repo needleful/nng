@@ -4,7 +4,7 @@
 	atomic_type/1,
 	xml_type/1,
 	numeric_type/1,
-	convert_arg/3,
+	convert_text/3,
 	to_atom/3,
 	exp_type/2,
 	common_type/2,
@@ -36,15 +36,11 @@ atomic_type(T) :- T=text;T=boolean;T=number;T=integer.
 xml_type(xml).
 numeric_type(T) :- T=number;T=integer.
 
-convert_arg(A, text, A) :- atom(A).
-convert_arg(A, boolean, A) :- A=true;A=false.
-convert_arg(A, number, N) :- atom(A), atom_number(A, N).
-convert_arg(A, integer, I) :- atom(A), atom_number(A, I), integer(I).
-convert_arg(El, list(Name, SubType), R) :-
-	maplist(list_item_convert(Name, SubType), El, R).
-convert_arg(El, struct(Assoc), R) :-
-	validate_inputs(Assoc, El, R).
-convert_arg(X, T, X) :- T=xml;T=markdown.
+convert_text(A, text, A) :- atom(A).
+convert_text(A, boolean, A) :- A=true;A=false.
+convert_text(A, number, N) :- atom(A), atom_number(A, N).
+convert_text(A, integer, I) :- atom(A), atom_number(A, I), integer(I).
+convert_text(X, T, X) :- T=xml;T=markdown.
 
 common_type([A|T], C) :-
 	common_type(A, T, C).
@@ -56,9 +52,6 @@ common_type(A, [B|T], C) :-
 
 to_atom(A, T, A) :- T=text;T=boolean.
 to_atom(N, T, A) :- (T=number;T=integer), atom_number(A, N).
-
-list_item_convert(Name, SubType, element(Name, _, Content), Result) :-
-	convert_arg(Content, SubType, Result).
 
 exp_type(Op, math) :- member(Op, 
 	[	+,-,/,*,mod,rem,//,div,rdiv,gcd,lcm,abs,**,^,

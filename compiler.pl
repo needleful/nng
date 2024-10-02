@@ -47,7 +47,7 @@ param_info(InAssoc, Attribs, Nodes, PName-(Type,Required,Default)) :-
 			'Defining "default" on required parameter is redundant':PName)
 	;	Required=false,
 		(	nonvar(DefaultText)
-		->	expect(convert_arg(DefaultText, Type, Default),
+		->	expect(convert_text(DefaultText, Type, Default),
 				'Invalid conversion for default value':default(PName)={DefaultText}->Type)
 		;	type_default(Type, Default))).
 
@@ -127,14 +127,14 @@ constant(true, boolean).
 constant(false, boolean).
 typecheck(_, I, integer, I) :- integer(I).
 typecheck(_, N, number, N) :- number(N).
-typecheck(_, S, text, S) :- string(S).
+typecheck(_, S, text, quote(A)) :- string(S), string_to_atom(S, A).
 typecheck(Input, A, Type, A) :- atom(A),
 	typecheck_get(root, Input, A, Type, A).
 typecheck(Input, (A|T), text, text(Formulas)) :- !,
 	typecheck_text_insert(Input, (A|T), [], Formulas).
 typecheck(Input, Base:Field, Type, get(Getter)) :-
 	typecheck_access(root, Input, Base:Field, Type, [], Getter).
-typecheck(Input, A->B;C, Type, l(cond,[Ca, Cb, Cc])) :-
+typecheck(Input, A->B;C, Type, cond(Ca, Cb, Cc)) :-
 	typecheck(Input, A, boolean, Ca),
 	typecheck(Input, B, TypeB, Cb),
 	typecheck(Input, C, TypeC, Cc),

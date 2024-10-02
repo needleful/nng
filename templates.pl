@@ -5,6 +5,7 @@
 	]).
 
 :- use_module(library(assoc)).
+:- use_module(library(lists)).
 :- use_module(common).
 :- use_module(library).
 
@@ -15,7 +16,7 @@ template(Name, InXML, OutXML) :-
 	validate_inputs(InputDef, InXML, Vars),
 	apply_template(Vars, Code, [], OutXML).
 
-generate_page(InXML, OutXML) :-
+generate_page([InXML], OutXML) :-
 	empty_assoc(Empty),
 	apply_node(Empty, InXML, OutXML).
 
@@ -32,9 +33,17 @@ validate_in(InputDef, [element(Name, _, Content)|Tail], Defined, Filled) :-
 	expect(get_assoc(Name, InputDef, (Type, _, _)), 
 		'Unexpected argument':Name),
 	expect(convert_arg(Content, Type, Value), 
-		'Type conversion failed':Content->Type),
+		'Type conversion failed':Name->Type:{Content}),
 	put_assoc(Name, Defined, Value, Defined2),
 	validate_in(InputDef, Tail, Defined2, Filled).
+
+convert_arg(In, Type, Val) :- convert_text(In, Type, Val).
+convert_arg(El, list(Name, SubType), R) :-
+	maplist(convert_list_item(Name, SubType), El, R).
+convert_arg(El, struct(Assoc), R) :-
+	validate_inputs(Assoc, El, R).
+convert_list_item(Name, SubType, element(Name, _, Content), Result) :-
+	convert_text(Content, SubType, Result).
 
 apply_defaults([], Defined, Defined).
 apply_defaults([Name-(_, Required, Default)|Tail], Defined, InAssoc) :-
@@ -46,43 +55,49 @@ apply_defaults([Name-(_, Required, Default)|Tail], Defined, InAssoc) :-
 
 apply_template(_, [], Result, Result).
 apply_template(Vars, [A|Tail], Xml, Result) :-
-	apply_node(Vars, A, NodeResult)
+	apply_node(Vars, A, NodeXml)
 	->	append(Xml, NodeXml, Xml2),
 		apply_template(Vars, Tail, Xml2, Result).
 
-apply_node(Vars, A, A) :- atom(A).
+apply_node(_, A, [A]) :- atom(A).
 
 apply_node(Vars, element(Name, Attrib, Content), NodeXml) :-
-	apply_template(Vars, Content, [], SubContent),
-	apply_attribs(Vars, Attrib, Attrib2),
+	apply_template(Vars, Content, [], SubResult),
+	%apply_attribs(Vars, Attrib, Attrib2),
+	Attrib2=Attrib,
 	(	template_defined(Name, _, _)
-		->	template(Name, SubContent, NodeXml)
-		;	NodeXml=[element(Name, Attrib2, SubContent)]).
+		->	template(Name, SubResult, NodeXml)
+		;	NodeXml=[element(Name, Attrib2, SubResult)]).
 
 apply_node(Vars, processor(Code), NodeXml) :-
-	process(Code, NodeXml).
+	process(Code, Vars, NodeXml).
 
 apply_node(Vars, insert_text(Type, Formula), [Result]) :-
-	fdo(Vars, Formula, Data),
+	evaln(Vars, Formula, Data),
 	to_atom(Data, Type, Result).
 
+apply_node(Vars, text(List), [Result]) :-
+	maplist(evaln(Vars), List, Atoms),
+	atomic_list_concat(Atoms, Result).
+
 apply_node(Vars, insert_xml(Formula), Result) :-
-	fdo(Vars, Formula, Result).
+	evaln(Vars, Formula, Result).
 
 process(foreach(ListName, Key, Index, Content), Vars, NodeXml) :-
-	fdo(Vars, ListName, List),
+	evaln(Vars, ListName, List),
+	indeces(List, Indeces),
 	maplist(process_foreach(Vars, Content, Key, Index), List, Indeces, NestedResult),
 	flatten(NestedResult, NodeXml).
 
 process(match(Formula, Content), Vars, NodeXml) :-
-	fdo(Vars, Formula, Match),
+	evaln(Vars, Formula, Match),
 	process_match(Vars, Match, Content, [], NodeXml).
 process(Other, _) :- err(Other, 'Unknown processor').
 
 process_foreach(Vars, Content, Key, Index, Item, Index, Result) :-
 	put_assoc(Key, Vars, Item, Vars2),
 	put_assoc(Key, Vars2, Index, Vars3),
-	apply_template(Vars3, Item, [], Result).
+	apply_template(Vars3, Content, [], Result).
 
 process_match(_,_,[],Result,Result).
 process_match(Vars, Match,[E|Tail],Xml,Result) :-
@@ -92,40 +107,61 @@ process_match(Vars, Match,[E|Tail],Xml,Result) :-
 	;	Xml2=Xml),
 	process_match(Vars, Match, Tail, Xml2, Result).
 
-fdo(_, S, A) :- string(S), string_to_atom(S, A).
-fdo(Vars, F, Value) :- atom(F), !,
+evaln(_, quote(A), A).
+evaln(Vars, F, Value) :- atom(F), !,
 	get_assoc(F, Vars, Value).
-fdo(Vars, Struct:Field, Val) :- !,
-	fdo(Vars, Struct, S),
-	fdo(S, Field, Val).
-% Logic evaluation
-fdo(Vars, (A,B), Val) :-
-	fdo(Vars, A, LA),
-	(	LA=true
-	->	fdo(Vars, B, Val)
-	;	Val=false).
-fdo(Vars, (A;B), Val) :-
-	fdo(Vars, A, LA)
-	(	LA=true
-	->	Val=true
-	;	fdo(Vars, B, Val)).
-fdo(Vars, (Cond->Then;Else), Val) :-
-	fdo(Vars, Cond, R),
-	(	R=true
-	->	fdo(Vars, Then, Val)
-	;	fdo(Vars, Else, Val)).
-fdo(Vars, \+Cond, Val) :-
-	fdo(Cond),
-	(	Cond=true
-	->	Val=false
-	;	Val=true).
-% Catchall
-fdo(Vars, Fn, Val) :- Fn =.. [F|Args],
-	(	maplist(fdo(Vars), Args, Values),
-		Exp =.. [F|Values],
-		(	exp_type(F, math)
-		->	Val is Exp
-		;	(	call(Exp)
-			->	Val = true
-			;	Val = false)).
-fdo(_, F, _) :- err(F, 'Bad formula').
+evaln(Vars, ntoa(F), A) :-
+	evaln(Vars, F, N),
+	atom_number(A, N).
+evaln(Vars, m(Op, Args), R) :-
+	maplist(evaln(Vars), Args, In),
+	Fn=..[Op|In],
+	R is Fn.
+evaln(Vars, p(Op, Args), R) :-
+	maplist(evaln(Vars), Args, In),
+	Fn=..[Op|In],
+	(	call(Fn)
+	->	R=true
+	;	R=false).
+evaln(Vars, f(Op, Args), R) :-
+	maplist(evaln(Vars), Args, In1),
+	append(In1, [R], In2),
+	Fn=..[Op|In2],
+	call(Fn).
+evaln(Vars, l(Op, Args), R) :-
+	maplist(evaln(Vars), Args, In),
+	Fn=..[Op|In],
+	eval_logic(Fn, R).
+evaln(Vars, cond(A,B,C), R) :-
+	evaln(Vars, A, F),
+	(	F=true
+	->	evaln(Vars, B, R)
+	;	evaln(Vars, C, R)).
+evaln(Vars, get(List), Value) :-
+	eval_get(root, Vars, List, Value).
+
+eval_logic((false;false), false).
+eval_logic((_;_), true).
+eval_logic((true;true), true).
+eval_logic((_;_), false).
+eval_logic(\+true, false).
+eval_logic(\+false, true).
+
+eval_get(Value, _, [], Value).
+eval_get(Ctx, Vars, [A|Tail], Value) :-
+	get_one_(Ctx, Vars, A, V1),
+	eval_get(V1, Vars, Tail, Value).
+get_one_(_, Vars, A, V) :- atom(A),
+	get_assoc(A, Vars, V).
+get_one_(Struct,_,sget(F),V) :-
+	get_assoc(F, Struct, V).
+get_one_(List,Vars,lget(F),V) :-
+	evaln(Vars, F, I),
+	nth0(I, List, V).
+
+indeces(L, I) :-
+	indeces_(L, 1, I).
+indeces_([], _, []).
+indeces_([_|Tail], C, [C|ITail]) :- 
+	Cp1 is C+1,
+	indeces_(Tail, Cp1, ITail).
