@@ -89,12 +89,38 @@ compile_code(Input, A, Code) :- atom(A),
 	compile_text(Input, A, Code, any).
 
 compile_code(Input, element(E, Attribs, Xml), Code) :-
-	compile_attribs(Input, Attribs, [], CAttr),
 	(	processor(E)
-	->	compile_processor(Input, E, CAttr, Xml, Processor),
-		Code=processor(Processor)
-	;	compile_xml(Input, Xml, SubCode),
+	->	compile_processor(Input, E, Attribs, Xml, Processor),
+		Code=proc(Processor)
+	;	compile_attribs(Input, Attribs, [], CAttr),
+		compile_xml(Input, Xml, SubCode),
 		Code=element(E,CAttr,SubCode)).
+
+processor(foreach).
+processor(match).
+
+compile_processor(Input, foreach, Attribs, Xml, foreach(ListName, ElName, Index, SubCode)) :-
+	get_foreach_attrib(Input, ('',it_, unknown), Attribs, (ListName, Index, ElName:ElType)),
+	put_assoc(ElName, Input, (ElType,true,[]), InputF),
+	put_assoc(Index, InputF, (integer,true,[]), ListInput), !,
+	compile_xml(ListInput, Xml, SubCode).
+compile_processor(Input, match, [val=Formula], Xml, match(Fn, SubCode)) :-
+	compile_formula(Input, Formula, (Type, Fn)),
+	expect(Type=text, 'match only supports matching on text':{Formula}),
+	compile_xml(Input, Xml, SubCode).
+
+get_foreach_attrib(_, Compiled, [], Compiled).
+get_foreach_attrib(Input, ('', Index, _), [list=Formula|Tail], Result) :-
+	expect(
+		compiler:typecheck(Input, Formula, list(ElName, ElType), ListF),
+		'Formula was not a list':Formula), !,
+	get_foreach_attrib(Input, (ListF, Index, ElName:ElType), Tail, Result).
+get_foreach_attrib(Input, (List, _, Element), [it=Name|Tail], Result) :-
+	atom(Name), !,
+	get_foreach_attrib(Input, (List, Name, Element), Tail, Result).
+get_foreach_attrib(_, _, [A|_], _) :-
+	writeln('Unexpected `foreach` attribute':{A}),
+	fail.
 
 compile_attribs(_,[],C,C).
 compile_attribs(Input, [N=V|Tail], Defined, Code) :-
@@ -123,6 +149,7 @@ compile_formula(Input, Text, (Type, CheckedFormula)) :-
 	expect(compiler:typecheck(Input, Formula, Type, CheckedFormula),
 		'Bad formula':{Formula}).
 
+%% The meat of compilation: typechecking
 constant(true, boolean).
 constant(false, boolean).
 typecheck(_, I, integer, I) :- integer(I).
@@ -208,9 +235,6 @@ check_text_(Input, A, Result) :-
 compile_conversion(T, F, T, F). 
 compile_conversion(boolean, F, text, F). 
 compile_conversion(T, N, text, ntoa(N)) :- numeric_type(T).
-
-processor(foreach).
-processor(match).
 
 type_default(T, '') :- T=text.
 type_default(T, false) :- T=boolean.

@@ -1,10 +1,11 @@
 <template name='predicates'>
 	<param name='pageNum' type='integer'/>
 	<content>
-		File "0[[pageNum]].template.xml" exists? [[
+		File <i>0[[pageNum]].template.xml</i> exists? [[
 			src_file_exists(0 | pageNum | ".template.xml")
 			->	"Yes."
 			;	"No."
 		]]
+		[[eq(pageNum,5) -> "Is the page number five?"; ""]]
 	</content>
 </template>

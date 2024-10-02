@@ -1,5 +1,11 @@
 :- module(library, [
-	src_file_exists/1
+	src_file_exists/1,
+	lt/2, 
+	leq/2,
+	gt/2, 
+	geq/2,
+	eq/2, 
+	neq/2
 	]).
 
 :- use_module(library(filesex)).

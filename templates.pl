@@ -72,7 +72,7 @@ apply_node(Vars, element(Name, Attrib, Content), NodeXml) :-
 	;	NodeXml=[element(Name, Attrib2, SubResult)]
 	).
 
-apply_node(Vars, processor(Code), NodeXml) :-
+apply_node(Vars, proc(Code), NodeXml) :-
 	process(Code, Vars, NodeXml).
 
 apply_node(Vars, insert_text(Type, Formula), [Result]) :-
@@ -104,17 +104,17 @@ apply_text_field(Vars, A, Result) :-
 process(foreach(ListName, Key, Index, Content), Vars, NodeXml) :-
 	evaln(Vars, ListName, List),
 	indeces(List, Indeces),
-	maplist(process_foreach(Vars, Content, Key, Index), List, Indeces, NestedResult),
+	maplist(process_foreach(Vars, (Key, Index), Content), List, Indeces, NestedResult),
 	flatten(NestedResult, NodeXml).
 
 process(match(Formula, Content), Vars, NodeXml) :-
 	evaln(Vars, Formula, Match),
 	process_match(Vars, Match, Content, [], NodeXml).
-process(Other, _) :- err(Other, 'Unknown processor').
+process(Other, _, _) :- err(Other, 'Bad processor').
 
-process_foreach(Vars, Content, Key, Index, Item, Index, Result) :-
+process_foreach(Vars, (Key, IndexName), Content, Item, Index, Result) :-
 	put_assoc(Key, Vars, Item, Vars2),
-	put_assoc(Key, Vars2, Index, Vars3),
+	put_assoc(IndexName, Vars2, Index, Vars3),
 	apply_template(Vars3, Content, [], Result).
 
 process_match(_,_,[],Result,Result).
@@ -182,7 +182,7 @@ get_one_(List,Vars,lget(F),V) :-
 	nth0(I, List, V).
 
 indeces(L, I) :-
-	indeces_(L, 1, I).
+	indeces_(L, 0, I).
 indeces_([], _, []).
 indeces_([_|Tail], C, [C|ITail]) :- 
 	Cp1 is C+1,

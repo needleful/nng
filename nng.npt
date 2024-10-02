@@ -61,6 +61,7 @@ m3
 - Spacing
 	p0
 	i23
-	/Do I want to preserve the original spacing?
-	/I basically have to for code blocks, but how often do I use them?
-	/Keeping the whitespace makes everything more annoying.
+	/It's absolutely needed.
+	/It doesn't even support spaces between stuff like
+	/<i>italics</i>.
+	/Now I need to figure out how the hell to process whitespace.

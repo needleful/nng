@@ -4,8 +4,10 @@
 			<param name='item' type='number'/>
 		</param>
 		<content>
-			<item id='[[list1:0]]'/>
-			<item id='[[list1:1+1]]'/>
+			<ul><foreach list='list1' it='id'>
+				<li id='item[[id]]'>Value: [[item]]</li>
+			</foreach></ul>
+			<p>The first item was [[list1:0]].</p>
 		</content>
 	</template>
 	<template name='struct-example'>
