@@ -40,7 +40,8 @@ param_info(InAssoc, Attribs, Nodes, PName-(Type,Required,Default)) :-
 		'No name given to parameter'),
 	expect(\+get_assoc(PName, InAssoc, _),
 		'Duplicate parameter':PName),
-	type(Type), !,
+	expect(type(Type),
+		'Invalid parameter type':{PName, Type}), !,
 	(	Required=true
 	->	expect(Default=[], 
 			'Defining "default" on required parameter is redundant':PName)
@@ -117,65 +118,101 @@ compile_text(Input, A, Code, Allowed) :- atom(A), atom(Allowed),
 		exclude(=(''), NewCode, Code)
 	;	Code=A).
 
-compile_formula(Input, Text, (Type, Formula)) :-
+compile_formula(Input, Text, (Type, CheckedFormula)) :-
 	read_term_from_atom(Text, Formula, [double_quoted(string)]),
-	expect(compiler:typecheck(Input, Formula, Type),
+	expect(compiler:typecheck(Input, Formula, Type, CheckedFormula),
 		'Bad formula':{Formula}).
 
 constant(true, boolean).
 constant(false, boolean).
-typecheck(_, I, integer) :- integer(I).
-typecheck(_, N, integer) :- number(N).
-typecheck(_, S, text) :- string(S).
-typecheck(Input, A, Type) :- atom(A),
-	typecheck_get(root, Input, A, Type).
-typecheck(Input, Base:Field, Type) :-
-	typecheck_access(root, Input, Base:Field, Type).
-typecheck(Input, A->B;C, Type) :-
-	typecheck(Input, A, boolean),
-	typecheck(Input, B, TypeB),
-	typecheck(Input, C, TypeC),
+typecheck(_, I, integer, I) :- integer(I).
+typecheck(_, N, number, N) :- number(N).
+typecheck(_, S, text, S) :- string(S).
+typecheck(Input, A, Type, A) :- atom(A),
+	typecheck_get(root, Input, A, Type, A).
+typecheck(Input, (A|T), text, text(Formulas)) :- !,
+	typecheck_text_insert(Input, (A|T), [], Formulas).
+typecheck(Input, Base:Field, Type, get(Getter)) :-
+	typecheck_access(root, Input, Base:Field, Type, [], Getter).
+typecheck(Input, A->B;C, Type, l(cond,[Ca, Cb, Cc])) :-
+	typecheck(Input, A, boolean, Ca),
+	typecheck(Input, B, TypeB, Cb),
+	typecheck(Input, C, TypeC, Cc),
 	common_type([TypeB, TypeC], Type).
-typecheck(Input, Fn, Type) :- Fn=..[Op, A1|Args], Op \= ':',
-	maplist(typecheck(Input), [A1|Args], ArgTypes),
+typecheck(Input, Fn, Type, CheckedFn) :- Fn=..[Op, A1|Args], Op \= ':',
+	maplist(typecheck(Input), [A1|Args], ArgTypes, CheckedArgs),
 	typecheck_fn(Op, OpType),
-	typecheck_call(OpType, Op, ArgTypes, Type).
+	expect( compiler:typecheck_call(OpType, Op, ArgTypes, Type, FunName),
+		'Bad expression':{Fn}),
+	% This maps to
+	% m(Op, Args) for math
+	% l(Op, Args) for logic
+	% p(Op, Args) for predicates
+	% f(Op, Args) for functions
+	CheckedFn=..[FunName, Op, CheckedArgs].
 
-typecheck_access(IType, Input, Base:Field, Type) :-
-	typecheck_get(IType, Input, Base, BaseType),
-	typecheck_access(BaseType, Input, Field, Type).
-typecheck_access(IType, Input, Field, Type) :- Field \= _:_,
-	typecheck_get(IType, Input, Field, Type).
+typecheck_access(IType, Input, Base:Field, Type, Current, Getter) :-
+	typecheck_get(IType, Input, Base, BaseType, Inner),
+	append(Current, [Inner], C2),
+	typecheck_access(BaseType, Input, Field, Type, C2, Getter).
+typecheck_access(IType, Input, Field, Type, Current, Getter) :- Field \= _:_,
+	typecheck_get(IType, Input, Field, Type, Inner),
+	append(Current, [Inner], Getter).
 
-typecheck_get(root, Input, Name, Type) :- atom(Name), 
+typecheck_get(root, Input, Name, Type, Name) :- atom(Name), 
 	(	constant(Name, Type), !
 	;	expect(get_assoc(Name, Input, (Type,_,_)),
 			'No variable found':Name)).
-typecheck_get(struct(Types), _, Name, Type) :-
+typecheck_get(struct(Types), _, Name, Type, sget(Name)) :-
 	expect(atom(Name), 'Invalid struct field name':Name),
 	expect(get_assoc(Name, Types, (Type,_,_)),
 		'Field not found':Name).
-typecheck_get(list(_, EType), Input, Formula, EType) :- !,
-	typecheck(Input, Formula, T),
+typecheck_get(list(_, EType), Input, Formula, EType, lget(C)) :- !,
+	typecheck(Input, Formula, T, C),
 	expect(T=integer, 'List expected an integer index, got':(T, Formula)).
-typecheck_get(Type,_,F,_) :- atom(Type), type(Type),
+typecheck_get(Type,_,F,_,_) :- atom(Type), type(Type),
 	format('Tried to get field {~w} on a variable of type {~w}~n', [F, Type]),
 	fail.
 
-typecheck_call(math, _, ArgTypes, Type) :- maplist(numeric_type, ArgTypes),
+typecheck_text_insert(Input, (A | Tail), Current, Result) :-
+	check_text_(Input, A, F),
+	append(Current, [F], C2),
+	typecheck_text_insert(Input, Tail, C2, Result).
+typecheck_text_insert(Input, A, Current, Result) :- 
+	check_text_(Input, A, F),
+	append(Current, [F], Result).
+
+typecheck_call(math, Op, ArgTypes, Type, m) :-
+	expect(maplist(numeric_type, ArgTypes),
+		'Math operators can only be called with numbers':{Op}),
 	common_type(ArgTypes, Type).
-typecheck_call(logic, _, ArgTypes, boolean) :- maplist(=(boolean), ArgTypes).
-typecheck_call(func, Op, ArgTypes, Type) :-
-	FnSig=..[Op|ArgTypes],
-	library:'::'(FnSig, Type).
+typecheck_call(logic, _, ArgTypes, boolean, l) :- maplist(=(boolean), ArgTypes).
+typecheck_call(func, Op, ArgTypes, Type, FunCall) :- FnSig=..[Op|ArgTypes],
+	expect( library:'::'(FnSig, Type),
+		'No such function defined':{FnSig}),
+	% Boolean and non-boolean functions are different
+	% Something like `f(X) :: integer` would describe a predicate f(X, Result)
+	% so we use 'p' for predicates and 'f' for functions.
+	(	Type=boolean
+	->	FunCall=p
+	;	FunCall=f
+	).
 
 typecheck_fn(Op, Type) :- exp_type(Op, Type), !.
 typecheck_fn(_, func).
 
+check_text_(Input, A, Result) :-
+	typecheck(Input, A, Type, Checked),
+	compile_conversion(Type, Checked, text, Result).
+
+compile_conversion(T, F, T, F). 
+compile_conversion(boolean, F, text, F). 
+compile_conversion(T, N, text, ntoa(N)) :- numeric_type(T).
+
 processor(foreach).
 processor(match).
 
-type_default(T, '') :- T=text;T=date;T=file.
+type_default(T, '') :- T=text.
 type_default(T, false) :- T=boolean.
 type_default(T, 0) :- T=number;T=integer.
 type_default(T,[]) :- T=list(_,_);T=xml;T=markdown.

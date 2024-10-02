@@ -14,8 +14,6 @@
 
 %%% Type information
 type(text).
-type(date).
-type(file).
 type(boolean).
 type(number).
 type(integer).
@@ -24,7 +22,6 @@ type(list(_,_)).
 % struct(Assoc)
 % Assoc is Name-Type, recursively defined
 type(struct(_)).
-type(markdown).
 type(xml).
 
 any(_).
@@ -32,19 +29,14 @@ any(_).
 convertible(T, T).
 convertible(number, text).
 convertible(integer, number).
-convertible(date, text).
-convertible(file, text).
 convertible(boolean, text).
 convertible(A, C) :- convertible(A, B), convertible(B, C).
 
-atomic_type(T) :- T=text;T=date;T=file;T=boolean;T=number;T=integer.
-xml_type(T) :- T=xml;T=markdown.
+atomic_type(T) :- T=text;T=boolean;T=number;T=integer.
+xml_type(xml).
 numeric_type(T) :- T=number;T=integer.
 
-% TODO: more validation for file and date
 convert_arg(A, text, A) :- atom(A).
-convert_arg(A, date, A) :- atom(A).
-convert_arg(A, file, A) :- atom(A).
 convert_arg(A, boolean, A) :- A=true;A=false.
 convert_arg(A, number, N) :- atom(A), atom_number(A, N).
 convert_arg(A, integer, I) :- atom(A), atom_number(A, I), integer(I).
@@ -62,7 +54,7 @@ common_type(A, [B|T], C) :-
 	convertible(B, TC),
 	common_type(TC, T, C).
 
-to_atom(A, T, A) :- T=text;T=date;T=file;T=boolean.
+to_atom(A, T, A) :- T=text;T=boolean.
 to_atom(N, T, A) :- (T=number;T=integer), atom_number(A, N).
 
 list_item_convert(Name, SubType, element(Name, _, Content), Result) :-

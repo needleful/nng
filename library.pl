@@ -10,7 +10,7 @@
 :- discontiguous('::'/2).
 
 % Other formula predicates
-src_file_exists(T) :: boolean :- T=file;T=text.
+src_file_exists(text) :: boolean.
 src_file_exists(RelPath) :- atom(RelPath),
 	b_getval(current_source, SourceFile),
 	relative_file_name(RealPath, SourceFile, RelPath),
