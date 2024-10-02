@@ -1,8 +1,8 @@
 <template name='predicates'>
 	<param name='pageNum' type='integer'/>
 	<content>
-		File "[[pageNum]].template.xml" exists? [[
-			src_file_exists(pageNum | ".template.xml")
+		File "0[[pageNum]].template.xml" exists? [[
+			src_file_exists(0 | pageNum | ".template.xml")
 			->	"Yes."
 			;	"No."
 		]]
