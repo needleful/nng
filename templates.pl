@@ -37,6 +37,7 @@ validate_in(InputDef, [element(Name, _, Content)|Tail], Defined, Filled) :-
 	put_assoc(Name, Defined, Value, Defined2),
 	validate_in(InputDef, Tail, Defined2, Filled).
 
+convert_arg(Content, xml, Content).
 convert_arg([In], Type, Val) :- atomic_type(Type),
 	convert_text(In, Type, Val).
 convert_arg(El, list(Name, SubType), R) :-
@@ -63,12 +64,8 @@ apply_template(Vars, [A|Tail], Xml, Result) :-
 apply_node(_, A, [A]) :- atom(A).
 
 apply_node(Vars, element(Name, Attrib, Content), NodeXml) :-
-	(	empty_assoc(Vars)
-	->	SubResult=Content,
-		Attrib2=Attrib
-	;	apply_template(Vars, Content, [], SubResult),
-		apply_attribs(Vars, Attrib, Attrib2)
-	),
+	apply_template(Vars, Content, [], SubResult),
+	apply_attribs(Vars, Attrib, Attrib2),
 	(	template_defined(Name, _, _)
 	->	template(Name, SubResult, NodeXml)
 	;	NodeXml=[element(Name, Attrib2, SubResult)]
@@ -80,10 +77,6 @@ apply_node(Vars, processor(Code), NodeXml) :-
 apply_node(Vars, insert_text(Type, Formula), [Result]) :-
 	evaln(Vars, Formula, Data),
 	to_atom(Data, Type, Result).
-
-apply_node(Vars, text(List), [Result]) :-
-	maplist(evaln(Vars), List, Atoms),
-	atomic_list_concat(Atoms, Result).
 
 apply_node(Vars, insert_xml(Formula), Result) :-
 	evaln(Vars, Formula, Result).
@@ -122,6 +115,9 @@ process_match(Vars, Match,[E|Tail],Xml,Result) :-
 evaln(_, quote(A), A).
 evaln(Vars, F, Value) :- atom(F), !,
 	get_assoc(F, Vars, Value).
+evaln(Vars, text(List), Result) :- 
+	maplist(evaln(Vars), List, Atoms),
+	atomic_list_concat(Atoms, Result).
 evaln(Vars, ntoa(F), A) :-
 	evaln(Vars, F, N),
 	atom_number(A, N).

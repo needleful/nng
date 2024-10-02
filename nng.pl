@@ -28,7 +28,6 @@ generate(Source, Out) :-
 	gen_dir(Source, Out).
 
 load_templates(SourceDir) :-
-	retractall(template_defined),
 	atom_concat(SourceDir, '/*.template.xml', TSource),
 	expand_file_name(TSource, TFiles),
 	maplist(compile_file, TFiles).

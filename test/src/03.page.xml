@@ -1,0 +1,11 @@
+<!-- I also want to test nested templates here -->
+<simple-types>
+	<use_cool>true</use_cool>
+	<count>20</count>
+	<yourName>Franklin</yourName>
+	<content>
+		<with-params>
+			<hello>Nested templates.</hello>
+		</with-params>
+	</content>
+</simple-types>
