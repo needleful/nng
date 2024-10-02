@@ -1,11 +1,22 @@
 <template name='predicates'>
 	<param name='pageNum' type='integer'/>
 	<content>
-		File <i>0[[pageNum]].template.xml</i> exists? [[
-			src_file_exists(0 | pageNum | ".template.xml")
-			->	"Yes."
-			;	"No."
-		]]
-		[[eq(pageNum,5) -> "Is the page number five?"; ""]]
+		<match val='pageNum == 5'>
+			<true>
+				<h1>You were looking for page five.</h1>
+			</true>
+			<false>
+				<p>File <i>0[[pageNum]].template.xml</i> exists? [[
+					src_file_exists(0 | pageNum | ".template.xml")
+					->	"Yes."
+					;	"No."
+				]]
+				</p>
+				<p>[[
+					(pageNum gt 0, pageNum lt 5)
+					->	"It was between 1 and 4?" 
+					;	"It was somewhere, I'm sure."]]</p>
+			</false>
+		</match>
 	</content>
 </template>

@@ -106,7 +106,8 @@ compile_processor(Input, foreach, Attribs, Xml, foreach(ListName, ElName, Index,
 	compile_xml(ListInput, Xml, SubCode).
 compile_processor(Input, match, [val=Formula], Xml, match(Fn, SubCode)) :-
 	compile_formula(Input, Formula, (Type, Fn)),
-	expect(Type=text, 'match only supports matching on text':{Formula}),
+	expect(\+numeric_type(text), 'match does not work on numbers':{Formula}),
+	expect(atomic_type(text), 'match only supports matching on text':Type:{Formula}),
 	compile_xml(Input, Xml, SubCode).
 
 get_foreach_attrib(_, Compiled, [], Compiled).
@@ -145,7 +146,7 @@ compile_text(Input, A, Code, Allowed) :- atom(A), atom(Allowed),
 	;	Code=A).
 
 compile_formula(Input, Text, (Type, CheckedFormula)) :-
-	read_term_from_atom(Text, Formula, [double_quoted(string)]),
+	read_term_from_atom(Text, Formula, [double_quoted(string), module(library)]),
 	expect(compiler:typecheck(Input, Formula, Type, CheckedFormula),
 		'Bad formula':{Formula}).
 
@@ -213,8 +214,10 @@ typecheck_call(math, Op, ArgTypes, Type, m) :-
 	expect(maplist(numeric_type, ArgTypes),
 		'Math operators can only be called with numbers':{Op}),
 	common_type(ArgTypes, Type).
-typecheck_call(logic, _, ArgTypes, boolean, l) :- maplist(=(boolean), ArgTypes).
-typecheck_call(func, Op, ArgTypes, Type, FunCall) :- FnSig=..[Op|ArgTypes],
+typecheck_call(logic, _, ArgTypes, boolean, l) :-
+	maplist(=(boolean), ArgTypes).
+typecheck_call(func, Op, ArgTypes, Type, FunCall) :-
+	FnSig=..[Op|ArgTypes],
 	expect( library:'::'(FnSig, Type),
 		'No such function defined':{FnSig}),
 	% Boolean and non-boolean functions are different
@@ -224,6 +227,10 @@ typecheck_call(func, Op, ArgTypes, Type, FunCall) :- FnSig=..[Op|ArgTypes],
 	->	FunCall=p
 	;	FunCall=f
 	).
+typecheck_call(compare, Op, [A,B], boolean, p) :-
+	expect((numeric_type(A), numeric_type(B)),
+		'Comparison is only valid between numbers':{Op, A, B}).
+	
 
 typecheck_fn(Op, Type) :- exp_type(Op, Type), !.
 typecheck_fn(_, func).

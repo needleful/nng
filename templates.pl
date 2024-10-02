@@ -150,10 +150,12 @@ evaln(Vars, f(Op, Args), R) :-
 	append(In1, [R], In2),
 	Fn=..[Op|In2],
 	call(Fn).
-evaln(Vars, l(Op, Args), R) :-
-	maplist(evaln(Vars), Args, In),
-	Fn=..[Op|In],
-	eval_logic(Fn, R).
+evaln(Vars, l(Op, [A,B]), R) :-
+	Fn=..[Op|[A,B]],
+	eval_logic(Vars, Fn, R).
+evaln(Vars, l(\+ , [A]), R) :-
+	evaln(Vars, A, N),
+	negate(N, R). 
 evaln(Vars, cond(A,B,C), R) :-
 	evaln(Vars, A, F),
 	(	F=true
@@ -162,12 +164,16 @@ evaln(Vars, cond(A,B,C), R) :-
 evaln(Vars, get(List), Value) :-
 	eval_get(root, Vars, List, Value).
 
-eval_logic((false;false), false).
-eval_logic((_;_), true).
-eval_logic((true;true), true).
-eval_logic((_;_), false).
-eval_logic(\+true, false).
-eval_logic(\+false, true).
+eval_logic(Vars, (A,B), R) :-
+	(	evaln(Vars, A, false)
+	->	R=false
+	;	evaln(Vars, B, R)).
+eval_logic(Vars, (A;B), R) :-
+	(	evaln(Vars, A, true)
+	->	R=true
+	;	evaln(Vars, B, R)).
+negate(true, false).
+negate(false, true).
 
 eval_get(Value, _, [], Value).
 eval_get(Ctx, Vars, [A|Tail], Value) :-

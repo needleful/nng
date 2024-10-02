@@ -23,7 +23,6 @@ src_file_exists(RelPath) :- atom(RelPath),
 	exists_file(RealPath).
 
 % Replacements for Comparison operators
-% Maybe someday I can get them working with read_term_from_atom
 :-op(700, xfx, lt).
 :-op(700, xfx, gt).
 :-op(700, xfx, leq).

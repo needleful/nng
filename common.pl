@@ -63,6 +63,7 @@ exp_type(Op, math) :- member(Op,
 		powm,lgamma,erf,erfc,pi,e,epsilon,inf,nan,cputime]).
 
 exp_type(Op, logic) :- member(Op, [';',',','->','\\+']).
+exp_type(Op, compare) :- member(Op, ['<', '=<', '==', '\\=', '>=', '>']).
 
 err(Term, Message) :- 
 	throw(error(Term, Message)).

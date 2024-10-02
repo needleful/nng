@@ -5,4 +5,7 @@
 	<predicates>
 		<pageNum>20202</pageNum>
 	</predicates>
+	<predicates>
+		<pageNum>03</pageNum>
+	</predicates>
 </tests>
