@@ -14,11 +14,11 @@
 template(Name, InXML, OutXML) :-
 	template_defined(Name, InputDef, Code),
 	validate_inputs(InputDef, InXML, Vars),
-	apply_template(Vars, Code, [], OutXML).
+	apply_template(Vars, Code, [], OutXML), !.
 
 generate_page([InXML], OutXML) :-
 	empty_assoc(Empty),
-	apply_node(Empty, InXML, OutXML).
+	apply_node(Empty, InXML, OutXML), !.
 
 validate_inputs(InputDef, XML, InAssoc) :-
 	empty_assoc(Defined),
@@ -32,12 +32,13 @@ validate_in(InputDef, [element(Name, _, Content)|Tail], Defined, Filled) :-
 		'Duplicate argument':Name),
 	expect(get_assoc(Name, InputDef, (Type, _, _)), 
 		'Unexpected argument':Name),
-	expect(convert_arg(Content, Type, Value), 
+	expect(templates:convert_arg(Content, Type, Value), 
 		'Type conversion failed':Name->Type:{Content}),
 	put_assoc(Name, Defined, Value, Defined2),
 	validate_in(InputDef, Tail, Defined2, Filled).
 
-convert_arg(In, Type, Val) :- convert_text(In, Type, Val).
+convert_arg([In], Type, Val) :- atomic_type(Type),
+	convert_text(In, Type, Val).
 convert_arg(El, list(Name, SubType), R) :-
 	maplist(convert_list_item(Name, SubType), El, R).
 convert_arg(El, struct(Assoc), R) :-
@@ -62,12 +63,16 @@ apply_template(Vars, [A|Tail], Xml, Result) :-
 apply_node(_, A, [A]) :- atom(A).
 
 apply_node(Vars, element(Name, Attrib, Content), NodeXml) :-
-	apply_template(Vars, Content, [], SubResult),
-	%apply_attribs(Vars, Attrib, Attrib2),
-	Attrib2=Attrib,
+	(	empty_assoc(Vars)
+	->	SubResult=Content,
+		Attrib2=Attrib
+	;	apply_template(Vars, Content, [], SubResult),
+		apply_attribs(Vars, Attrib, Attrib2)
+	),
 	(	template_defined(Name, _, _)
-		->	template(Name, SubResult, NodeXml)
-		;	NodeXml=[element(Name, Attrib2, SubResult)]).
+	->	template(Name, SubResult, NodeXml)
+	;	NodeXml=[element(Name, Attrib2, SubResult)]
+	).
 
 apply_node(Vars, processor(Code), NodeXml) :-
 	process(Code, Vars, NodeXml).
@@ -82,6 +87,13 @@ apply_node(Vars, text(List), [Result]) :-
 
 apply_node(Vars, insert_xml(Formula), Result) :-
 	evaln(Vars, Formula, Result).
+
+apply_attribs(Vars, A, A2) :-
+	maplist(apply_attr_(Vars), A, A2).
+
+apply_attr(Vars, Key=Value, Key2=Value2) :-
+	apply_node(Vars, Key, Key2),
+	apply_node(Vars, Value, Value2).
 
 process(foreach(ListName, Key, Index, Content), Vars, NodeXml) :-
 	evaln(Vars, ListName, List),

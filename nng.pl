@@ -78,4 +78,5 @@ gen_file(SFile, OFile) :-
 		!,
 		(	close(Stream)
 		;	writeln('The file didn\'t close?'))
-	;	print_term('Failed to write':OutHtml, [quoted(true)])).
+	;	print_term('Failed to write':OutHtml, [quoted(true)])),
+	!.
