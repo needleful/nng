@@ -18,8 +18,10 @@ compile_template(element(templates, _, Templates)) :-
 
 compile_template(element(template, [name=Name], Content)) :-
 	empty_assoc(Empty),
-	compile_params(Content, (Empty, InputDef), ContentNodes),
-	compile_xml(InputDef, ContentNodes, Code),
+	expect(compiler:compile_params(Content, (Empty, InputDef), ContentNodes),
+		'Failed to compile parameters for':Name),
+	expect(compiler:compile_xml(InputDef, ContentNodes, Code),
+		'Failed to compile content for':Name),
 	retractall(template_defined(Name, _, _)),
 	assert(template_defined(Name, InputDef, Code)), !.
 
@@ -79,10 +81,15 @@ compile_xml(Input, Body, Code) :-
 compile_xml(_,[],Code,Code).
 compile_xml(Input,[Node|Body],Working,Code) :-
 	is_list(Working),
-	compile_code(Input, Node, NodeResult),
-	(	NodeResult = [_|_]
-	->	append(Working, NodeResult, Working2)
-	;	append(Working, [NodeResult], Working2)),
+	(	compile_code(Input, Node, NodeResult)
+	;	err(Node, 'Failed to compile node')),
+	(	NodeResult = []
+	->	Working2=Working
+	;	(	NodeResult = [_|_]
+		->	append(Working, NodeResult, Working2)
+		;	append(Working, [NodeResult], Working2)
+		)
+	),
 	compile_xml(Input, Body, Working2, Code).
 
 compile_code(Input, A, Code) :- atom(A),
@@ -92,8 +99,10 @@ compile_code(Input, element(E, Attribs, Xml), Code) :-
 	(	processor(E)
 	->	compile_processor(Input, E, Attribs, Xml, Processor),
 		Code=proc(Processor)
-	;	compile_attribs(Input, Attribs, [], CAttr),
-		compile_xml(Input, Xml, SubCode),
+	;	expect(compiler:compile_attribs(Input, Attribs, [], CAttr),
+			'Bad attributes':Attribs),
+		expect(compiler:compile_xml(Input, Xml, SubCode),
+			'Bad XML':Xml),
 		Code=element(E,CAttr,SubCode)).
 
 processor(foreach).
@@ -125,15 +134,16 @@ get_foreach_attrib(_, _, [A|_], _) :-
 
 compile_attribs(_,[],C,C).
 compile_attribs(Input, [N=V|Tail], Defined, Code) :-
-	compile_text(Input, N, NC, numeric_type),
-	compile_text(Input, V, VC, numeric_type),
+	compile_text(Input, N, NC, atomic_type),
+	compile_text(Input, V, VC, atomic_type),
 	append(Defined, [NC=VC], Defined2),
 	compile_attribs(Input, Tail, Defined2, Code).
 
-compile_text(Input, A, Code, Allowed) :- atom(A), atom(Allowed),
+compile_text(Input, A, Code, Allowed) :- atom(A),
 	(	extract(A, Before, Ftext, After)
 	->	compile_formula(Input, Ftext, (Type, Formula)),
-		call(Allowed, Type),
+		expect(call(Allowed, Type),
+			'Incompatible types':(Allowed, Type)),
 		(	atomic_type(Type)
 		->	ThisCode=insert_text(Type, Formula)
 		;	xml_type(Type),

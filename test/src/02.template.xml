@@ -1,6 +1,7 @@
 <template name='with-params'>
 	<param name='hello'/>
 	<content>
+		<link rel='stylesheet' href='/needleful.css'/>
 		<o>Hello, [[hello]]!</o>
 	</content>
 </template>

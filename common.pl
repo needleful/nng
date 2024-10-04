@@ -66,7 +66,7 @@ exp_type(Op, logic) :- member(Op, [';',',','->','\\+']).
 exp_type(Op, compare) :- member(Op, ['<', '=<', '==', '\\=', '>=', '>']).
 
 err(Term, Message) :- 
-	throw(error(Term, Message)).
+	throw(nng_error(Message, Term)).
 
 expect(Term, Message) :-
 	(	call(Term)
