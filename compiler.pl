@@ -49,7 +49,7 @@ param_info(InAssoc, Attribs, Nodes, PName-(Type,Required,Default)) :-
 			'Defining "default" on required parameter is redundant':PName)
 	;	Required=false,
 		(	nonvar(DefaultText)
-		->	expect(convert_text(DefaultText, Type, Default),
+		->	expect(convert_text(Type, DefaultText, Default),
 				'Invalid conversion for default value':default(PName)={DefaultText}->Type)
 		;	type_default(Type, Default))).
 
@@ -180,8 +180,8 @@ typecheck(Input, A->B;C, Type, cond(Ca, Cb, Cc)) :-
 typecheck(Input, Fn, Type, CheckedFn) :- Fn=..[Op, A1|Args], Op \= ':',
 	maplist(typecheck(Input), [A1|Args], ArgTypes, CheckedArgs),
 	typecheck_fn(Op, OpType),
-	expect( compiler:typecheck_call(OpType, Op, ArgTypes, Type, FunName),
-		'Bad expression':{Fn}),
+	(	typecheck_call(OpType, Op, ArgTypes, Type, FunName)
+	;	err(Fn, 'Bad expression')),
 	% This maps to
 	% m(Op, Args) for math
 	% l(Op, Args) for logic

@@ -25,7 +25,8 @@ generate(Source, Out) :-
 	;	writeln('Failed to generate templates.'), fail),
 	!,
 	writeln('%-----TEMPLATES GENERATED-----%'), 
-	gen_dir(Source, Out).
+	gen_dir(Source, Out),
+	!.
 
 load_templates(SourceDir) :-
 	atom_concat(SourceDir, '/*.template.xml', TSource),

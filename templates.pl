@@ -40,13 +40,16 @@ validate_in(InputDef, [element(Name, _, Content)|Tail], Defined, Filled) :-
 
 convert_arg(Content, xml, Content).
 convert_arg([In], Type, Val) :- atomic_type(Type),
-	convert_text(In, Type, Val).
+	convert_text(Type, In, Val).
+convert_arg(List, text, Val) :- is_list(List),
+	maplist(convert_text(text), List, Converted),
+	atomic_list_concat(Converted, Val).
 convert_arg(El, list(Name, SubType), R) :-
 	maplist(convert_list_item(Name, SubType), El, R).
 convert_arg(El, struct(Assoc), R) :-
 	validate_inputs(Assoc, El, R).
-convert_arg(_, Type, _) :-
-	writeln('Unknown type:':Type),
+convert_arg(Val, Type, _) :-
+	writeln('Bad conversion':Val->Type),
 	fail.
 convert_list_item(Name, SubType, element(Name, _, Content), Result) :-
 	convert_arg(Content, SubType, Result).
@@ -86,9 +89,11 @@ apply_node(Vars, insert_text(Type, Formula), [Result]) :-
 apply_node(Vars, insert_xml(Formula), Result) :-
 	evaln(Vars, Formula, Result).
 
-apply_node(_,Node,_) :- writeln('Failed to apply node'),
-	print_term(Node, []),
-	nl,
+apply_node(_,_,_) :-
+	%writeln('Failed to apply node'),
+	%writeln(Node),
+	%print_term(Node, []),
+	% nl,
 	fail.
 
 apply_attribs(Vars, A, A2) :-

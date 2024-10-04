@@ -1,5 +1,6 @@
 :- module(library, [
 	src_file_exists/1,
+	src_dir_exists/1,
 	lt/2, 
 	leq/2,
 	gt/2, 
@@ -18,10 +19,16 @@
 
 % Other formula predicates
 src_file_exists(text) :: boolean.
-src_file_exists(RelPath) :- atom(RelPath),
+src_file_exists(Path) :- atom(Path),
 	b_getval(current_source, SourceFile),
-	relative_file_name(RealPath, SourceFile, RelPath),
-	exists_file(RealPath).
+	relative_file_name(RealFile, SourceFile, Path),
+	exists_file(RealFile).
+
+src_dir_exists(text) :: boolean.
+src_dir_exists(Path) :- atom(Path),
+	b_getval(current_source, SourceFile),
+	relative_file_name(RealDir, SourceFile, Path),
+	exists_directory(RealDir).
 
 say_month(date) :: text.
 say_month(_/1/_, 'January').
