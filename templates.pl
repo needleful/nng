@@ -45,6 +45,9 @@ convert_arg(El, list(Name, SubType), R) :-
 	maplist(convert_list_item(Name, SubType), El, R).
 convert_arg(El, struct(Assoc), R) :-
 	validate_inputs(Assoc, El, R).
+convert_arg(_, Type, _) :-
+	writeln('Unknown type:':Type),
+	fail.
 convert_list_item(Name, SubType, element(Name, _, Content), Result) :-
 	convert_arg(Content, SubType, Result).
 
@@ -146,10 +149,9 @@ evaln(Vars, p(Op, Args), R) :-
 	->	R=true
 	;	R=false).
 evaln(Vars, f(Op, Args), R) :-
-	maplist(evaln(Vars), Args, In1),
-	append(In1, [R], In2),
-	Fn=..[Op|In2],
-	call(Fn).
+	maplist(evaln(Vars), Args, In),
+	Fn=..[Op|In],
+	call(Fn, R).
 evaln(Vars, l(Op, [A,B]), R) :-
 	Fn=..[Op|[A,B]],
 	eval_logic(Vars, Fn, R).
@@ -177,15 +179,18 @@ negate(false, true).
 
 eval_get(Value, _, [], Value).
 eval_get(Ctx, Vars, [A|Tail], Value) :-
-	get_one_(Ctx, Vars, A, V1),
+	get_one(Ctx, Vars, A, V1),
 	eval_get(V1, Vars, Tail, Value).
-get_one_(_, Vars, A, V) :- atom(A),
+get_one(_, Vars, A, V) :- atom(A),
 	get_assoc(A, Vars, V).
-get_one_(Struct,_,sget(F),V) :-
+get_one(Struct,_,sget(F),V) :-
 	get_assoc(F, Struct, V).
-get_one_(List,Vars,lget(F),V) :-
+get_one(List,Vars,lget(F),V) :-
 	evaln(Vars, F, I),
 	nth0(I, List, V).
+get_one(Year/_/_,  _,  dget(year),  Year).
+get_one(_/Month/_, _,  dget(month), Month).
+get_one(_/_/Day,   _,  dget(day),   Day).
 
 indeces(L, I) :-
 	indeces_(L, 0, I).

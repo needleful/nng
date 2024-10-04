@@ -208,6 +208,8 @@ typecheck_get(struct(Types), _, Name, Type, sget(Name)) :-
 typecheck_get(list(_, EType), Input, Formula, EType, lget(C)) :- !,
 	typecheck(Input, Formula, T, C),
 	expect(T=integer, 'List expected an integer index, got':(T, Formula)).
+typecheck_get(date, _, Name, integer, dget(Name)) :-
+	(Name=day; Name=month; Name=year).
 typecheck_get(Type,_,F,_,_) :- atom(Type), type(Type),
 	format('Tried to get field {~w} on a variable of type {~w}~n', [F, Type]),
 	fail.

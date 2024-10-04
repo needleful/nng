@@ -63,7 +63,8 @@ h_gen_files(SourceDir, OutDir, [S|Files]) :-
 gen_file(SFile, OFile) :-
 	(	writeln(in:SFile->out:OFile),
 		b_setval(current_source, SFile),
-		exists_file(SFile),
+		expect(exists_file(SFile),
+			'File does not exist':SFile),
 		access_file(OFile, write),
 		load_xml(SFile, SourceXml, [space(sgml)]),
 		generate_page(SourceXml, OutHtml)

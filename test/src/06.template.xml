@@ -1,0 +1,4 @@
+<template name='date-test'>
+	<param name='date' type='date'/>
+	<content>Written: [[say_month(date)]] [[date:day]] [[date:year]]</content>
+</template>

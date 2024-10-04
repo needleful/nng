@@ -14,15 +14,16 @@
 
 %%% Type information
 type(text).
+type(xml).
 type(boolean).
 type(number).
 type(integer).
+type(date).
 % list(ElementName,ElementType)
 type(list(_,_)).
 % struct(Assoc)
 % Assoc is Name-Type, recursively defined
 type(struct(_)).
-type(xml).
 
 any(_).
 
@@ -32,7 +33,7 @@ convertible(integer, number).
 convertible(boolean, text).
 convertible(A, C) :- convertible(A, B), convertible(B, C).
 
-atomic_type(T) :- T=text;T=boolean;T=number;T=integer.
+atomic_type(T) :- T=text;T=boolean;T=number;T=integer;T=date.
 xml_type(xml).
 numeric_type(T) :- T=number;T=integer.
 
@@ -40,6 +41,11 @@ convert_text(A, text, A) :- atom(A).
 convert_text(A, boolean, A) :- A=true;A=false.
 convert_text(A, number, N) :- atom(A), atom_number(A, N).
 convert_text(A, integer, I) :- atom(A), atom_number(A, I), integer(I).
+convert_text(A, date, Year/Month/Day) :-
+	read_term_from_atom(A, Year/Month/Day, []),
+	integer(Year),
+	integer(Month),
+	integer(Day).
 convert_text(X, T, X) :- T=xml;T=markdown.
 
 common_type([A|T], C) :-
