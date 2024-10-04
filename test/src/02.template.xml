@@ -2,6 +2,6 @@
 	<param name='hello'/>
 	<content>
 		<link rel='stylesheet' href='/needleful.css'/>
-		<o>Hello, [[hello]]!</o>
+		<o>Hello, <i>[[hello]]!</i></o>
 	</content>
 </template>

@@ -10,7 +10,7 @@
 :- use_module(templates).
 
 compile_file(File) :-
-	load_xml(File, [XML], [space(remove)]),
+	load_xml(File, [XML], [space(sgml)]),
 	compile_template(XML), !.
 
 compile_template(element(templates, _, Templates)) :-

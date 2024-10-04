@@ -65,7 +65,7 @@ gen_file(SFile, OFile) :-
 		b_setval(current_source, SFile),
 		exists_file(SFile),
 		access_file(OFile, write),
-		load_xml(SFile, SourceXml, [space(remove)]),
+		load_xml(SFile, SourceXml, [space(sgml)]),
 		generate_page(SourceXml, OutHtml)
 	;	err(SFile, 'Failed to process file')),
 	!,
