@@ -1,0 +1,8 @@
+<template name='cond'>
+	<param name='n' type='number'/>
+	<content>
+		<p>[[n]].
+			<when cond='n mod 2 == 0'><strong>EVEN NUMBER DETECTED</strong></when>
+		</p>
+	</content>
+</template>

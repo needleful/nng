@@ -108,6 +108,7 @@ compile_code(Input, element(E, Attribs, Xml), Code) :-
 
 processor(foreach).
 processor(match).
+processor(when).
 
 compile_processor(Input, foreach, Attribs, Xml, foreach(ListName, ElName, Index, SubCode)) :-
 	get_foreach_attrib(Input, ('',it_, unknown), Attribs, (ListName, Index, ElName:ElType)),
@@ -118,6 +119,10 @@ compile_processor(Input, match, [val=Formula], Xml, match(Fn, SubCode)) :-
 	compile_formula(Input, Formula, (Type, Fn)),
 	expect(\+numeric_type(text), 'match does not work on numbers':{Formula}),
 	expect(atomic_type(text), 'match only supports matching on text':Type:{Formula}),
+	compile_xml(Input, Xml, SubCode).
+compile_processor(Input, when, [cond=Formula], Xml, when(Fn, SubCode)) :-
+	compile_formula(Input, Formula, (Type, Fn)),
+	expect(Type=boolean, '`when` only supports boolean statements':(Type, Fn)),
 	compile_xml(Input, Xml, SubCode).
 
 get_foreach_attrib(_, Compiled, [], Compiled).

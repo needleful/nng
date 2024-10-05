@@ -185,6 +185,11 @@ process(foreach(ListName, Key, Index, Content), Vars, NodeXml) :-
 process(match(Formula, Content), Vars, NodeXml) :-
 	evaln(Vars, Formula, Match),
 	process_match(Vars, Match, Content, [], NodeXml).
+process(when(Formula, Content), Vars, NodeXml) :-
+	evaln(Vars, Formula, R),
+	(	R=true
+	->	apply_template(Vars, Content, [], NodeXml)
+	;	NodeXml = []).
 process(Other, _, _) :- err(Other, 'Bad processor').
 
 process_foreach(Vars, (Key, IndexName), Content, Item, Index, Result) :-
