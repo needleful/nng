@@ -1,7 +1,6 @@
 :- module(compiler, [
 	compile_file/1,
-	compile_template/1,
-	numeric_type/1
+	compile_template/1
 	]).
 
 :- use_module(library(sgml)).
@@ -120,10 +119,13 @@ compile_processor(Input, match, [val=Formula], Xml, match(Fn, SubCode)) :-
 	expect(\+numeric_type(text), 'match does not work on numbers':{Formula}),
 	expect(atomic_type(text), 'match only supports matching on text':Type:{Formula}),
 	compile_xml(Input, Xml, SubCode).
-compile_processor(Input, when, [cond=Formula], Xml, when(Fn, SubCode)) :-
+compile_processor(Input, when, [val=Formula], Xml, when(Fn, SubCode)) :-
 	compile_formula(Input, Formula, (Type, Fn)),
 	expect(Type=boolean, '`when` only supports boolean statements':(Type, Fn)),
 	compile_xml(Input, Xml, SubCode).
+compile_processor(_, Name, Attribs, _, _) :-
+	writeln('Invalid processor':(Name, Attribs)),
+	fail.
 
 get_foreach_attrib(_, Compiled, [], Compiled).
 get_foreach_attrib(Input, ('', Index, _), [list=Formula|Tail], Result) :-
