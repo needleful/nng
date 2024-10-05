@@ -68,11 +68,17 @@ convert_markdown([E|Tail], Working, Result) :-
 
 md_convert_element(A, Xml) :- atom(A),
 	atom_string(A, Str),
-	md_parse_string(Str, Html),
-	maplist(html_to_xml, Html, Xml).
+	expect(templates:md_parse_string(Str, Html),
+		'Malformed markdown'),
+	maplist(html_to_xml_h, Html, Xml), !.
 md_convert_element(element(Name, Attribs, Content), element(Name, Attribs, Content2)) :-
 	convert_markdown(Content, [], Content2).
 
+html_to_xml_h(Html, Xml) :-
+	expect(templates:html_to_xml(Html, Xml),
+		'Bad HTML'), !.
+
+html_to_xml(A, A) :- atom(A).
 html_to_xml(S, A) :- string(S), atom_string(A, S).
 html_to_xml(\List, A) :- is_list(List),
 	maplist(html_atom_convert, List, Atoms),
@@ -82,12 +88,27 @@ html_to_xml(E, element(Name, [], Content)) :- E=..[Name, HtmlContent],
 html_to_xml(E, element(Name, Attribs, Content)) :- E=..[Name, HAttribs, HtmlContent],
 	convert_html_attribs(HAttribs, Attribs),
 	convert_html_elements(HtmlContent, Content).
+html_to_xml(E, _) :-
+	bad_html(E).
 
-html_atom_convert(A, A) :- atom(A).
-html_atom_convert(S, A) :- string(S), atom_string(A, S).
+bad_html(E):-
+	writeln('Unexpected HTML'),
+	(	E=..[A|_]
+	->	writeln(func(A, '...'))
+	;	'...'),
+	fail.
+
+
+html_atom_convert(A, A) :- atom(A), !.
+html_atom_convert(S, A) :- string(S), atom_string(A, S), !.
 html_atom_convert(S, _) :-
+	bad_markdown(S).
+
+bad_markdown(S) :-
 	writeln('Unexpected text-like'),
-	write_canonical(S), !,
+	(	S=..[A|_]
+	->	writeln(func(A, '...'))
+	;	'...'),
 	fail.
 
 convert_html_elements(List, XList) :- is_list(List),
