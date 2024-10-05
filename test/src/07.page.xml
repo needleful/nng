@@ -1,0 +1,17 @@
+<md-test>
+	<content>
+- Item 1 and _italics_ of *different* types
+- Item 2 and __bold text__ of **other types**
+- Item 3 with ~~crossed text~~
+
+Paragraphs/linebreaks.
+
+```C
+#include &lt;stdio.h&gt;
+int main() {
+	puts("Some C code");
+	return 0;
+}
+```
+	</content>
+</md-test>

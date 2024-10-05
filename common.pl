@@ -19,6 +19,7 @@ type(boolean).
 type(number).
 type(integer).
 type(date).
+type(markdown).
 % list(ElementName,ElementType)
 type(list(_,_)).
 % struct(Assoc)
@@ -34,7 +35,7 @@ convertible(boolean, text).
 convertible(A, C) :- B \= A, convertible(A, B), convertible(B, C).
 
 atomic_type(T) :- T=text;T=boolean;T=number;T=integer;T=date.
-xml_type(xml).
+xml_type(T) :- T=xml;T=markdown.
 numeric_type(T) :- T=number;T=integer.
 
 convert_text(text, A, A) :- atom(A).

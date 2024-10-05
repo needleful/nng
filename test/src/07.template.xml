@@ -1,0 +1,8 @@
+<template name='md-test'>
+	<param name='content' type='markdown'/>
+	<content>
+		<div id='my-cool-content'>
+			[[content]]
+		</div>
+	</content>
+</template>

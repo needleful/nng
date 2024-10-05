@@ -6,6 +6,7 @@
 
 :- use_module(library(assoc)).
 :- use_module(library(lists)).
+:- use_module(library(md/md_parse)).
 :- use_module(library(pprint)).
 :- use_module(common).
 :- use_module(library).
@@ -39,6 +40,8 @@ validate_in(InputDef, [element(Name, _, Content)|Tail], Defined, Filled) :-
 	validate_in(InputDef, Tail, Defined2, Filled).
 
 convert_arg(Content, xml, Content).
+convert_arg(Content, markdown, MdContent) :-
+	convert_markdown(Content, [], MdContent).
 convert_arg([In], Type, Val) :- atomic_type(Type),
 	convert_text(Type, In, Val).
 convert_arg(List, text, Val) :- is_list(List),
@@ -53,6 +56,49 @@ convert_arg(Val, Type, _) :-
 	fail.
 convert_list_item(Name, SubType, element(Name, _, Content), Result) :-
 	convert_arg(Content, SubType, Result).
+
+convert_markdown([], W, W).
+convert_markdown([E|Tail], Working, Result) :-
+	md_convert_element(E, A),
+	(	is_list(A)
+	->	append(Working, A, Working2)
+	;	append(Working, [A], Working2)
+	),
+	convert_markdown(Tail, Working2, Result).
+
+md_convert_element(A, Xml) :- atom(A),
+	atom_string(A, Str),
+	md_parse_string(Str, Html),
+	maplist(html_to_xml, Html, Xml).
+md_convert_element(element(Name, Attribs, Content), element(Name, Attribs, Content2)) :-
+	convert_markdown(Content, [], Content2).
+
+html_to_xml(S, A) :- string(S), atom_string(A, S).
+html_to_xml(\List, A) :- is_list(List),
+	maplist(html_atom_convert, List, Atoms),
+	atomic_list_concat(Atoms, A).
+html_to_xml(E, element(Name, [], Content)) :- E=..[Name, HtmlContent],
+	convert_html_elements(HtmlContent, Content).
+html_to_xml(E, element(Name, Attribs, Content)) :- E=..[Name, HAttribs, HtmlContent],
+	convert_html_attribs(HAttribs, Attribs),
+	convert_html_elements(HtmlContent, Content).
+
+html_atom_convert(A, A) :- atom(A).
+html_atom_convert(S, A) :- string(S), atom_string(A, S).
+html_atom_convert(S, _) :-
+	writeln('Unexpected text-like'),
+	write_canonical(S), !,
+	fail.
+
+convert_html_elements(List, XList) :- is_list(List),
+	maplist(html_to_xml, List, XList).
+convert_html_elements(E, [X]) :-
+	html_to_xml(E, X).
+
+convert_html_attribs([], []).
+convert_html_attribs(A=B, [A=B]).
+convert_html_attribs([A=B|T], [A=B|XT]) :-
+	convert_html_attribs(T, XT).
 
 apply_defaults([], Defined, Defined).
 apply_defaults([Name-(_, Required, Default)|Tail], Defined, InAssoc) :-
