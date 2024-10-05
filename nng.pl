@@ -21,12 +21,7 @@ main([InFolder, OutFolder]) :-
 	generate(InFolder, OutFolder).
 
 generate(Source, Out) :-
-	(	load_templates(Source)
-	;	writeln('Failed to generate templates.'), fail),
-	!,
-	writeln('%-----TEMPLATES GENERATED-----%'), 
-	gen_dir(Source, Out),
-	!.
+	gen_dir(Source, Out), !.
 
 load_templates(SourceDir) :-
 	atom_concat(SourceDir, '/*.template.xml', TSource),
@@ -36,6 +31,7 @@ load_templates(SourceDir) :-
 gen_dir(SourceDir, OutDir) :-
 	writeln(dir:SourceDir->OutDir),
 	exists_directory(SourceDir),
+	load_templates(SourceDir),
 	(	exists_directory(OutDir)
 	;	make_directory(OutDir)),
 	!,
@@ -62,8 +58,7 @@ h_gen_files(SourceDir, OutDir, [S|Files]) :-
 	h_gen_files(SourceDir, OutDir, Files).
 
 gen_file(SFile, OFile) :-
-	(	writeln(in:SFile->out:OFile),
-		b_setval(current_source, SFile),
+	(	b_setval(current_source, SFile),
 		expect(exists_file(SFile),
 			'File does not exist':SFile),
 		access_file(OFile, write),
