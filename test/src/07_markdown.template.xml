@@ -1,0 +1,16 @@
+<templates>
+	<template name='md-test'>
+		<param name='content' type='markdown'/>
+		<content>
+			<div id='my-cool-content'>
+				[[content]]
+			</div>
+		</content>
+	</template>
+	<template name='cool-example'>
+		<param name='input' type='text'/>
+		<content>
+			Some extra stuff for <b>[[input]].</b>
+		</content>
+	</template>
+</content>
