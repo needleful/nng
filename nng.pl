@@ -34,7 +34,7 @@ gen_dir(SourceDir, OutDir) :-
 	load_templates(SourceDir),
 	(	exists_directory(OutDir)
 	;	make_directory(OutDir)),
-	!,
+				  !,
 	directory_files(SourceDir, ['.', '..'|SFiles]),
 	h_gen_files(SourceDir, OutDir, SFiles).
 
