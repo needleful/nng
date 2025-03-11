@@ -9,8 +9,6 @@
 	</template>
 	<template name='cool-example'>
 		<param name='input' type='text'/>
-		<content>
-			Some extra stuff for <b>[[input]].</b>
-		</content>
+		<content>Some extra stuff for <b>[[input]].</b></content>
 	</template>
-</content>
+</templates>
