@@ -27,17 +27,32 @@ compile_template(element(template, [name=Name], Content)) :-
 
 %%% Parameter compilation
 
+param_name_info(N-Info, N, Info).
+% Data type
+pinfo_type((T,_,_,_), T).
+% If it must be provided
+pinfo_required((_,R,_,_), R).
+pinfo_default((_,_,D,_), D).
+% Allows use of <template>data</> instead of <template><param>data</></>
+% Only for single-parameter templates
+pinfo_only((_,_,_,O), O).
+pinfo_set_default(D, ((A,B,C,_), (A,B,C,D))).
+
 compile_params([], (InputDef, InputDef), _).
 compile_params([element(param, Attribs, Nodes)|Tail], (InAssoc, InputDef), ContentNodes) :-
-	param_info(InAssoc, Attribs, Nodes, PName-Value),
-	put_assoc(PName, InAssoc, Value, InAssoc2),
+	param_info(InAssoc, Attribs, Nodes, Param),
+	param_name_info(Param, PName, PValue),
+	put_assoc(PName, InAssoc, PValue, InAssoc2),
 	compile_params(Tail, (InAssoc2,InputDef), ContentNodes).
 compile_params([element(content, _, Content)|Tail], Input, ContentNodes) :-
 	ContentNodes=Content,
 	compile_params(Tail, Input, ContentNodes).
 
-param_info(InAssoc, Attribs, Nodes, PName-(Type,Required,Default)) :-
-	param_attrib(Attribs, Nodes, PName-(Type,Required,DefaultText)),
+param_info(InAssoc, Attribs, Nodes, PName-Info) :-
+	param_attrib(Attribs, Nodes, PName-InfoUnparsed),
+	pinfo_required(InfoUnparsed, Required),
+	pinfo_type(InfoUnparsed, Type),
+	pinfo_default(InfoUnparsed, DefaultText),
 	expect(nonvar(PName),
 		'No name given to parameter'),
 	expect(\+get_assoc(PName, InAssoc, _),
@@ -51,21 +66,29 @@ param_info(InAssoc, Attribs, Nodes, PName-(Type,Required,Default)) :-
 		(	nonvar(DefaultText)
 		->	expect(convert_text(Type, DefaultText, Default),
 				'Invalid conversion for default value':default(PName)={DefaultText}->Type)
-		;	type_default(Type, Default))).
+		;	type_default(Type, Default))),
+	pinfo_set_default(Default, (InfoUnparsed, Info)).
 
 param_attrib([], _, _).
-param_attrib([name=N|X], Xml, N-Val) :-
-	param_attrib(X, Xml, N-Val).
-param_attrib([type=T|X], Xml, N-(Type,R,D)) :-
+param_attrib([name=N|X], Xml, Param) :-
+	param_name_info(Param, N, _),
+	param_attrib(X, Xml, Param).
+param_attrib([type=T|X], Xml, N-Info) :-
 	(	(T=list;T=struct)
 	->	get_full_type(T, Xml, Type)
 	;	Type=T,
 		Xml=[]),
-	param_attrib(X, Xml, N-(T,R,D)).
-param_attrib([required=R|X], Xml, N-(T,R,D)) :-
-	param_attrib(X, Xml, N-(T,R,D)).
-param_attrib([default=D|X], Xml, N-(T,R,D)) :-
-	param_attrib(X, Xml, N-(T,R,D)).
+	pinfo_type(Info, Type),
+	param_attrib(X, Xml, N-Info).
+param_attrib([required=R|X], Xml, N-Info) :-
+	pinfo_required(Info, R),
+	param_attrib(X, Xml, N-Info).
+param_attrib([default=D|X], Xml, N-Info) :-
+	pinfo_default(Info, D),
+	param_attrib(X, Xml, N-Info).
+param_attrib(['only-param'=O|X], Xml, N-Info) :-
+	pinfo_only(Info, O),
+	param_attrib(X, Xml, N-Info).
 
 get_full_type(list, [element(param, Attribs, Content)], list(EName, SubType)) :-
 	empty_assoc(Empty),

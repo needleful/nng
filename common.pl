@@ -9,7 +9,8 @@
 	exp_type/2,
 	common_type/2,
 	err/2,
-	expect/2
+	expect/2,
+	with/2
 	]).
 
 %%% Type information
@@ -79,3 +80,22 @@ expect(Term, Message) :-
 	(	call(Term)
 	->	true
 	;	writeln(Message), fail).
+
+with(S, Code) :- with_s_do(S, Code).
+with_s_do((S, S2), (A, B)) :-
+	with_s_do((S, S1), A),
+	with_s_do((S1, S2), B).
+with_s_do((S, S2), (A; B)) :-
+	with_s_do((S, S2), A)
+	;	with_s_do((S, S2), B).
+with_s_do((S, S2), (A -> B ; C)) :-
+	with_s_do((S, S1), A)
+	->	with_s_do((S1, S2), B)
+	;	with_s_do((S, S2), C).
+with_s_do((S, S2), (A -> B)) :-
+	with_s_do((S, S1), A)
+	->	with_s_do((S1, S2), B).
+with_s_do((S,S), {Excluded}) :- !,
+	call(Excluded).
+with_s_do(S, Other) :-
+	call(Other, S).
