@@ -14,30 +14,30 @@
 :- dynamic(template_defined/3).
 
 template(Name, InXML, OutXML) :-
-	template_defined(Name, InputDef, Code),
-	validate_inputs(InputDef, InXML, Vars),
+	template_defined(Name, ParamAssoc, Code),
+	validate_inputs(ParamAssoc, InXML, Vars),
 	apply_template(Vars, Code, [], OutXML), !.
 
 generate_page([InXML], OutXML) :-
 	empty_assoc(Empty),
 	apply_node(Empty, InXML, OutXML), !.
 
-validate_inputs(InputDef, XML, InAssoc) :-
+validate_inputs(ParamAssoc, XML, InAssoc) :-
 	empty_assoc(Defined),
-	validate_in(InputDef, XML, Defined, Filled),
-	assoc_to_list(InputDef, InputList),
-	apply_defaults(InputList, Filled, InAssoc).
+	validate_in(ParamAssoc, XML, Defined, Filled),
+	assoc_to_list(ParamAssoc, ParamList),
+	apply_defaults(ParamList, Filled, InAssoc).
 
 validate_in(_, [], Defined, Defined).
-validate_in(InputDef, [element(Name, _, Content)|Tail], Defined, Filled) :-
-	expect(get_assoc(Name, InputDef, (Type, _, _)), 
+validate_in(ParamAssoc, [element(Name, _, Content)|Tail], Defined, Filled) :-
+	expect(get_assoc(Name, ParamAssoc, (Type, _)), 
 		'Unexpected argument':Name),
 	expect(\+ get_assoc(Name, Defined, _),
 		'Duplicate argument':Name),
 	expect(templates:convert_arg(Content, Type, Value), 
 		'Type conversion failed':Name->Type:{Content}),
 	put_assoc(Name, Defined, Value, Defined2),
-	validate_in(InputDef, Tail, Defined2, Filled).
+	validate_in(ParamAssoc, Tail, Defined2, Filled).
 
 convert_arg(Content, xml, Content).
 convert_arg(Content, markdown, MdContent) :-
