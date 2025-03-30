@@ -4,8 +4,8 @@
 	<count>20</count>
 	<yourName>Franklin</yourName>
 	<content>
-		<with-params>
-			<hello>Nested templates.</hello>
-		</with-params>
+		<hello>
+			<person>Nested templates.</person>
+		</hello>
 	</content>
 </simple-types>

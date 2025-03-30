@@ -1,7 +1,8 @@
-<template name='with-params'>
-	<param name='hello'/>
+<template name='hello'>
+	<param name='person'/>
 	<content>
 		<link rel='stylesheet' href='/needleful.css'/>
-		<o>Hello, <i>[[hello]]!</i></o>
+		<!--Content is filled in with double brackets-->
+		<o>Hello, <i>[[person]]!</i></o>
 	</content>
 </template>

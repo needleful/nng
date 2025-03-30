@@ -1,3 +1,4 @@
+<!--A minimal, zero-argument template. Just makes some XML.-->
 <template name='minimal'>
 	<content>
 		<o>Hello</o>
