@@ -1,6 +1,6 @@
 <templates>
 	<template name='list-example'>
-		<param name='list1' type='list'>
+		<param name='list1' type='list' only-param='true'>
 			<param name='item' type='number'/>
 		</param>
 		<content>
@@ -11,7 +11,7 @@
 		</content>
 	</template>
 	<template name='struct-example'>
-		<param name='struct1' type='struct'>
+		<param name='struct1' type='struct' only-param='true'>
 			<param name='id' type='integer'/>
 			<param name='content' type='xml'/>
 		</param>

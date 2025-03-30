@@ -8,7 +8,7 @@
 		</content>
 	</template>
 	<template name='cool-example'>
-		<param name='input' type='text'/>
+		<param name='input' type='text' only-param='true'/>
 		<content>Some extra stuff for <b>[[input]].</b></content>
 	</template>
 </templates>

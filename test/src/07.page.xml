@@ -8,7 +8,7 @@ Paragraphs/linebreaks.
 
 <span class='special'>Embedded HTML</span>
 
-<cool-example><input>My Cool Example</input></cool-example>
+<cool-example>My Cool Example</cool-example>
 
 ```C
 #include &lt;stdio.h&gt;

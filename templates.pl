@@ -24,20 +24,36 @@ generate_page([InXML], OutXML) :-
 
 validate_inputs(ParamAssoc, XML, InAssoc) :-
 	empty_assoc(Defined),
-	validate_in(ParamAssoc, XML, Defined, Filled),
 	assoc_to_list(ParamAssoc, ParamList),
-	apply_defaults(ParamList, Filled, InAssoc).
+	with((Defined, InAssoc), (
+		(	templates:validate_only(ParamList, XML)
+			;
+			templates:validate_each(ParamAssoc, XML)
+		),
+		templates:apply_defaults(ParamList)
+	)).
 
-validate_in(_, [], Defined, Defined).
-validate_in(ParamAssoc, [element(Name, _, Content)|Tail], Defined, Filled) :-
-	expect(get_assoc(Name, ParamAssoc, (Type, _)), 
+validate_only([(Name-PInfo)], XML, (Defined, Filled)) :-
+	pinfo_only(PInfo, true),
+	pinfo_type(PInfo, Type),
+	expect(templates:convert_arg(XML, Type, Value),
+		'Template parameter invalid':Name->Type:{Value}),
+	put_assoc(Name, Defined, Value, Filled).
+
+validate_each(_, [], (D,D)).
+validate_each(ParamAssoc, [element(Name, _, Content)|Tail], (Defined, Filled)) :-
+	expect(get_assoc(Name, ParamAssoc, PInfo), 
 		'Unexpected argument':Name),
+	pinfo_type(PInfo, Type),
+	pinfo_only(PInfo, Only),
+	expect(Only=false,
+		"Invalid use of the 'only-param' attribute on template parameter (it's only valid for templates with one parameter)":(Name-PInfo)),
 	expect(\+ get_assoc(Name, Defined, _),
 		'Duplicate argument':Name),
 	expect(templates:convert_arg(Content, Type, Value), 
 		'Type conversion failed':Name->Type:{Content}),
 	put_assoc(Name, Defined, Value, Defined2),
-	validate_in(ParamAssoc, Tail, Defined2, Filled).
+	validate_each(ParamAssoc, Tail, (Defined2, Filled)).
 
 convert_arg(Content, xml, Content).
 convert_arg(Content, markdown, MdContent) :-
@@ -121,13 +137,13 @@ convert_html_attribs(A=B, [A=B]).
 convert_html_attribs([A=B|T], [A=B|XT]) :-
 	convert_html_attribs(T, XT).
 
-apply_defaults([], Defined, Defined).
-apply_defaults([Name-(_, Required, Default)|Tail], Defined, InAssoc) :-
+apply_defaults([], (D, D)).
+apply_defaults([Name-(_, Required, Default)|Tail], (Defined, InAssoc)) :-
 	get_assoc(Name, Defined, _)
-	->	apply_defaults(Tail, Defined, InAssoc)
+	->	apply_defaults(Tail, (Defined, InAssoc))
 	;	expect(Required=false, 'Missing required parameter':Name),
 		put_assoc(Name, Defined, Default, Defined2),
-		apply_defaults(Tail, Defined2, InAssoc).
+		apply_defaults(Tail, (Defined2, InAssoc)).
 
 apply_template(_, [], Result, Result).
 apply_template(Vars, [A|Tail], Xml, Result) :-

@@ -1,5 +1,5 @@
 <template name='predicates'>
-	<param name='pageNum' type='integer'/>
+	<param name='pageNum' type='integer' only-param='true'/>
 	<content>
 		<match val='pageNum == 5'>
 			<true>

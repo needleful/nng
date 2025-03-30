@@ -1,5 +1,11 @@
 <template name='hello'>
-	<param name='person'/>
+	<!--'only-param' means you don't have to write
+	<hello><person>Name</person></hello>
+	Instead, writing
+	<hello>Name</hello>
+	Of course, it's an error to use it when there's multiple parameters.
+	-->
+	<param name='person' only-param='true'/>
 	<content>
 		<link rel='stylesheet' href='/needleful.css'/>
 		<!--Content is filled in with double brackets-->

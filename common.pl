@@ -91,7 +91,7 @@ with(S, Code) :- with_s_do(S, Code).
 with_s_do((S, S2), (A, B)) :-
 	with_s_do((S, S1), A),
 	with_s_do((S1, S2), B).
-with_s_do((S, S2), (A; B)) :-
+with_s_do((S, S2), (A ; B)) :-
 	with_s_do((S, S2), A)
 	;	with_s_do((S, S2), B).
 with_s_do((S, S2), (A -> B ; C)) :-
@@ -115,4 +115,4 @@ pinfo_default((_,_,D,_), D).
 % Allows use of <template>data</> instead of <template><param>data</></>
 % Only for single-parameter templates
 pinfo_only((_,_,_,O), O).
-pinfo_set_default(D, ((A,B,C,_), (A,B,C,D))).
+pinfo_set_default(D, ((T,R,_,O), (T,R,D,O))).

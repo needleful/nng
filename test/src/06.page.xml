@@ -1,4 +1,4 @@
 <ul>
-	<li><date-test><date>2021/02/02</date></date-test></li>
-	<li><date-test><date>1996/12/20</date></date-test></li>
+	<li><date-test>2021/02/02</date-test></li>
+	<li><date-test>1996/12/20</date-test></li>
 </ul>
