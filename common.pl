@@ -10,7 +10,13 @@
 	common_type/2,
 	err/2,
 	expect/2,
-	with/2
+	with/2,
+	param_name_info/3,
+	pinfo_type/2,
+	pinfo_required/2,
+	pinfo_default/2,
+	pinfo_only/2,
+	pinfo_set_default/2
 	]).
 
 %%% Type information
@@ -99,3 +105,14 @@ with_s_do((S,S), {Excluded}) :- !,
 	call(Excluded).
 with_s_do(S, Other) :-
 	call(Other, S).
+
+param_name_info(N-Info, N, Info).
+% Data type
+pinfo_type((T,_,_,_), T).
+% If it must be provided
+pinfo_required((_,R,_,_), R).
+pinfo_default((_,_,D,_), D).
+% Allows use of <template>data</> instead of <template><param>data</></>
+% Only for single-parameter templates
+pinfo_only((_,_,_,O), O).
+pinfo_set_default(D, ((A,B,C,_), (A,B,C,D))).

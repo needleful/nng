@@ -27,32 +27,26 @@ compile_template(element(template, [name=Name], Content)) :-
 
 %%% Parameter compilation
 
-param_name_info(N-Info, N, Info).
-% Data type
-pinfo_type((T,_,_,_), T).
-% If it must be provided
-pinfo_required((_,R,_,_), R).
-pinfo_default((_,_,D,_), D).
-% Allows use of <template>data</> instead of <template><param>data</></>
-% Only for single-parameter templates
-pinfo_only((_,_,_,O), O).
-pinfo_set_default(D, ((A,B,C,_), (A,B,C,D))).
-
-compile_params([], (InputDef, InputDef), _).
-compile_params([element(param, Attribs, Nodes)|Tail], (InAssoc, InputDef), ContentNodes) :-
+compile_params(Xml, State, Content) :-
+	compile_params_h(Xml, State, Content).
+compile_params_h([], (InputDef, InputDef), _).
+compile_params_h([element(param, Attribs, Nodes)|Tail], (InAssoc, InputDef), ContentNodes) :-
 	param_info(InAssoc, Attribs, Nodes, Param),
 	param_name_info(Param, PName, PValue),
 	put_assoc(PName, InAssoc, PValue, InAssoc2),
-	compile_params(Tail, (InAssoc2,InputDef), ContentNodes).
-compile_params([element(content, _, Content)|Tail], Input, ContentNodes) :-
+	compile_params_h(Tail, (InAssoc2,InputDef), ContentNodes).
+compile_params_h([element(content, _, Content)|Tail], Input, ContentNodes) :-
 	ContentNodes=Content,
-	compile_params(Tail, Input, ContentNodes).
+	compile_params_h(Tail, Input, ContentNodes).
 
 param_info(InAssoc, Attribs, Nodes, PName-Info) :-
-	param_attrib(Attribs, Nodes, PName-InfoUnparsed),
-	pinfo_required(InfoUnparsed, Required),
-	pinfo_type(InfoUnparsed, Type),
-	pinfo_default(InfoUnparsed, DefaultText),
+	param_attrib(Attribs, Nodes, PName-Pinfo),
+	pinfo_required(Pinfo, Required),
+	pinfo_type(Pinfo, Type),
+	pinfo_default(Pinfo, DefaultText),
+	(	pinfo_only(Pinfo, false)
+	;	pinfo_only(Pinfo, true)
+	),
 	expect(nonvar(PName),
 		'No name given to parameter'),
 	expect(\+get_assoc(PName, InAssoc, _),
@@ -67,7 +61,8 @@ param_info(InAssoc, Attribs, Nodes, PName-Info) :-
 		->	expect(convert_text(Type, DefaultText, Default),
 				'Invalid conversion for default value':default(PName)={DefaultText}->Type)
 		;	type_default(Type, Default))),
-	pinfo_set_default(Default, (InfoUnparsed, Info)).
+
+	pinfo_set_default(Default, (Pinfo, Info)).
 
 param_attrib([], _, _).
 param_attrib([name=N|X], Xml, Param) :-
