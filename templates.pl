@@ -138,12 +138,15 @@ convert_html_attribs([A=B|T], [A=B|XT]) :-
 	convert_html_attribs(T, XT).
 
 apply_defaults([], (D, D)).
-apply_defaults([Name-(_, Required, Default)|Tail], (Defined, InAssoc)) :-
-	get_assoc(Name, Defined, _)
-	->	apply_defaults(Tail, (Defined, InAssoc))
-	;	expect(Required=false, 'Missing required parameter':Name),
-		put_assoc(Name, Defined, Default, Defined2),
-		apply_defaults(Tail, (Defined2, InAssoc)).
+apply_defaults([Name-PInfo|Tail], (Defined, InAssoc)) :-
+	pinfo_default(PInfo, Default),
+	pinfo_required(PInfo, Required),
+	(	get_assoc(Name, Defined, _)
+		->	apply_defaults(Tail, (Defined, InAssoc))
+		;	expect(Required=false, 'Missing required parameter':Name),
+			put_assoc(Name, Defined, Default, Defined2),
+			apply_defaults(Tail, (Defined2, InAssoc))
+	).
 
 apply_template(_, [], Result, Result).
 apply_template(Vars, [A|Tail], Xml, Result) :-

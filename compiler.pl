@@ -80,6 +80,7 @@ param_attrib([required=R|X], Xml, N-Info) :-
 	param_attrib(X, Xml, N-Info).
 param_attrib([default=D|X], Xml, N-Info) :-
 	pinfo_default(Info, D),
+	pinfo_required(Info, false),
 	param_attrib(X, Xml, N-Info).
 param_attrib(['only-param'=O|X], Xml, N-Info) :-
 	pinfo_only(Info, O),
