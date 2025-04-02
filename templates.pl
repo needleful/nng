@@ -99,19 +99,19 @@ html_to_xml(S, A) :- string(S), atom_string(A, S).
 html_to_xml(\List, A) :- is_list(List),
 	maplist(html_atom_convert, List, Atoms),
 	atomic_list_concat(Atoms, A).
+html_to_xml(img(Attribs), element(img, AttrXML, [])) :-
+	convert_html_attribs(Attribs, AttrXML).
 html_to_xml(E, element(Name, [], Content)) :- E=..[Name, HtmlContent],
 	convert_html_elements(HtmlContent, Content).
 html_to_xml(E, element(Name, Attribs, Content)) :- E=..[Name, HAttribs, HtmlContent],
 	convert_html_attribs(HAttribs, Attribs),
 	convert_html_elements(HtmlContent, Content).
-html_to_xml(E, _) :-
+html_to_xml(E, E) :-
 	bad_html(E).
 
 bad_html(E):-
 	writeln('Unexpected HTML'),
-	(	E=..[A|_]
-	->	writeln(func(A, '...'))
-	;	'...'),
+	writeln(E),
 	fail.
 
 
