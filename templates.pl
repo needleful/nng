@@ -88,7 +88,15 @@ md_convert_element(A, Xml) :- atom(A),
 		'Malformed markdown'),
 	maplist(html_to_xml_h, Html, Xml), !.
 md_convert_element(element(Name, Attribs, Content), element(Name, Attribs, Content2)) :-
-	convert_markdown(Content, [], Content2).
+	(	md_block_element(Name)
+	->	convert_markdown(Content, [], Content2)
+	;	Content = Content2
+	).
+
+% Add elements here if they should have children converted as Markdown
+% Otherwise, the element and its children are added as verbatim HTML
+md_block_element(details).
+md_block_element(div).
 
 html_to_xml_h(Html, Xml) :-
 	expect(templates:html_to_xml(Html, Xml),
