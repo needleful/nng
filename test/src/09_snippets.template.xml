@@ -1,0 +1,8 @@
+<template name='page'>
+	<param name='content' type='markdown' only-param='true'/>
+	<content>
+		<div>
+			[[content]]
+		</div>
+	</content>
+</template>

@@ -1,6 +1,7 @@
 :- module(templates, [
 	template/3,
 	template_defined/3,
+	snippet_defined/3,
 	generate_page/2
 	]).
 
@@ -12,6 +13,7 @@
 :- use_module(library).
 
 :- dynamic(template_defined/3).
+:- dynamic(snippet_defined/3).
 
 template(Name, InXML, OutXML) :-
 	template_defined(Name, ParamAssoc, Code),
@@ -97,6 +99,8 @@ md_convert_element(element(Name, Attribs, Content), element(Name, Attribs, Conte
 % Otherwise, the element and its children are added as verbatim HTML
 md_block_element(details).
 md_block_element(div).
+md_block_element('nng:refer').
+md_block_element('nng:snippet').
 
 html_to_xml_h(Html, Xml) :-
 	expect(templates:html_to_xml(Html, Xml),
@@ -164,6 +168,27 @@ apply_template(Vars, [A|Tail], Xml, Result) :-
 
 apply_node(_, A, [A]) :- atom(A).
 
+apply_node(Vars, element('nng:snippet', Attrib, Content), NodeXml) :-
+	apply_template(Vars, Content, [], SubResult),
+	apply_attribs(Vars, Attrib, Attrib2),
+	expect(templates:attrib_get(name, Attrib2, Name),
+		'Expected name in nng:snippet attributes':Attrib2),
+	expect(\+ templates:snippet_defined(Name, _, _),
+		'Duplicate snippet defined':Name),
+	assertz(snippet_defined(Name, '/path/to/snippet', SubResult)),
+	NodeXml=[element(div, [id=Name, class='block-snippet'], SubResult)].
+
+apply_node(Vars, element('nng:refer', Attrib, _), NodeXml) :-
+	apply_attribs(Vars, Attrib, Attrib2),
+	expect(templates:attrib_get(name, Attrib2, Name),
+		'Expected name in nng:snippet attributes':Attrib2),
+	expect(templates:snippet_defined(Name, Path, Content),
+		'No snippet defined':Name),
+	append(Content, 
+		[element(br, [], []), element(a, [href=Path], ['Quoted Snippet'])],
+		SubResult),
+	NodeXml=[element(div, [class='block-snippet referer'], SubResult)].
+
 apply_node(Vars, element(Name, Attrib, Content), NodeXml) :-
 	apply_template(Vars, Content, [], SubResult),
 	apply_attribs(Vars, Attrib, Attrib2),
@@ -202,6 +227,9 @@ apply_text_field(Vars, [A|Tail], Result) :-
 	atomic_list_concat(Flat, Result).
 apply_text_field(Vars, A, Result) :-
 	apply_node(Vars, A, [Result]).
+
+attrib_get(Key, [Key=Value|_], Value) :- !.
+attrib_get(Key, [_|Other], Value) :- attrib_get(Key, Other, Value).
 
 process(foreach(ListName, Key, Index, Content), Vars, NodeXml) :-
 	evaln(Vars, ListName, List),
