@@ -9,6 +9,7 @@ m3
 	- Processors
 		p0
 		i3
+		x
 		- foreach
 			p0
 			i4
@@ -16,9 +17,11 @@ m3
 		- match
 			p0
 			i5
+			x
 		- foreach (again)
 			p0
 			i14
+			x
 	- Expressions
 		p0
 		i6
@@ -49,6 +52,7 @@ m3
 	- Tiny templates
 		p0
 		i15
+		x
 		/Instead of
 		/<my-template><var>Value</var></my-template>
 		/I should be able to use
@@ -58,9 +62,16 @@ m3
 		p0
 		i26
 		/A lot of time it just fails. It's an active effort at the moment.
+	- Snippets
+		p0
+		i28
+		- Collect referals and apply them all in bulk
+			p0
+			i29
 - Spacing
 	p0
 	i23
+	x
 	/It's absolutely needed.
 	/It doesn't even support spaces between stuff like
 	/<i>italics</i>.

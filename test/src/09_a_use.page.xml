@@ -1,0 +1,8 @@
+<page xmlns:nng='https://needleful.net/xml/nng-schema'>
+
+And now for a message from our sponsor (this page is probably templated before the snippet's defined!):
+
+<nng:refer name='09-example-snippet'/>
+
+Thanks.
+</page>

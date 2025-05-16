@@ -1,8 +1,9 @@
 :- module(templates, [
-	template/3,
+	template/4,
 	template_defined/3,
 	snippet_defined/3,
-	generate_page/2
+	generate_page/3,
+	get_snippets/2
 	]).
 
 :- use_module(library(assoc)).
@@ -15,14 +16,17 @@
 :- dynamic(template_defined/3).
 :- dynamic(snippet_defined/3).
 
-template(Name, InXML, OutXML) :-
+template(Name, InXML, OutXML, UseRef) :-
 	template_defined(Name, ParamAssoc, Code),
 	validate_inputs(ParamAssoc, InXML, Vars),
-	apply_template(Vars, Code, [], OutXML), !.
+	apply_template(Vars, Code, [], OutXML, (false, UseRef)), !.
 
-generate_page([InXML], OutXML) :-
+generate_page([InXML], OutXML, UseRef) :-
 	empty_assoc(Empty),
-	apply_node(Empty, InXML, OutXML), !.
+	apply_node(Empty, InXML, OutXML, UseRef), !.
+
+get_snippets(InXML, OutXML) :- 
+	maplist(apply_referal, InXML, OutXML).
 
 validate_inputs(ParamAssoc, XML, InAssoc) :-
 	empty_assoc(Defined),
@@ -160,16 +164,17 @@ apply_defaults([Name-PInfo|Tail], (Defined, InAssoc)) :-
 			apply_defaults(Tail, (Defined2, InAssoc))
 	).
 
-apply_template(_, [], Result, Result).
-apply_template(Vars, [A|Tail], Xml, Result) :-
-	apply_node(Vars, A, NodeXml)
+apply_template(_, [], Result, Result, (U, U)).
+apply_template(Vars, [A|Tail], Xml, Result, (U, UseRef)) :-
+	apply_node(Vars, A, NodeXml, NodeUseRef)
 	->	append(Xml, NodeXml, Xml2),
-		apply_template(Vars, Tail, Xml2, Result).
+		useref_or(NodeUseRef, (U, U2)),
+		apply_template(Vars, Tail, Xml2, Result, (U2, UseRef)).
 
-apply_node(_, A, [A]) :- atom(A).
+apply_node(_, A, [A], false) :- atom(A).
 
-apply_node(Vars, element('nng:snippet', Attrib, Content), NodeXml) :-
-	apply_template(Vars, Content, [], SubResult),
+apply_node(Vars, element('nng:snippet', Attrib, Content), NodeXml, UseRef) :-
+	apply_template(Vars, Content, [], SubResult, (false, UseRef)),
 	apply_attribs(Vars, Attrib, Attrib2),
 	expect(templates:attrib_get(name, Attrib2, Name),
 		'Expected name in nng:snippet attributes':Attrib2),
@@ -178,37 +183,40 @@ apply_node(Vars, element('nng:snippet', Attrib, Content), NodeXml) :-
 	assertz(snippet_defined(Name, '/path/to/snippet', SubResult)),
 	NodeXml=[element(div, [id=Name, class='block-snippet'], SubResult)].
 
-apply_node(Vars, element('nng:refer', Attrib, _), NodeXml) :-
+apply_node(Vars, element('nng:refer', Attrib, _), NodeXml, UseRef) :-
 	apply_attribs(Vars, Attrib, Attrib2),
 	expect(templates:attrib_get(name, Attrib2, Name),
-		'Expected name in nng:snippet attributes':Attrib2),
-	expect(templates:snippet_defined(Name, Path, Content),
-		'No snippet defined':Name),
-	append(Content, 
-		[element(br, [], []), element(a, [href=Path], ['Quoted Snippet'])],
-		SubResult),
-	NodeXml=[element(div, [class='block-snippet referer'], SubResult)].
-
-apply_node(Vars, element(Name, Attrib, Content), NodeXml) :-
-	apply_template(Vars, Content, [], SubResult),
-	apply_attribs(Vars, Attrib, Attrib2),
-	(	template_defined(Name, _, _)
-	->	template(Name, SubResult, NodeXml)
-	;	NodeXml=[element(Name, Attrib2, SubResult)]
+		'Expected name in nng:refer attributes':Attrib2),
+	(	snippet_defined(Name, Path, Content)
+	->	snippet_referal((Name, Path, Content), Ref),
+		NodeXml=[Ref],
+		UseRef=false
+	;	NodeXml=[element('nng:refer', [name=Name], [])],
+		UseRef=true
 	).
 
-apply_node(Vars, proc(Code), NodeXml) :-
-	process(Code, Vars, NodeXml).
+apply_node(Vars, element(Name, Attrib, Content), NodeXml, UseRef) :-
+	apply_template(Vars, Content, [], SubResult, (false, SUseRef)),
+	apply_attribs(Vars, Attrib, Attrib2),
+	(	template_defined(Name, _, _)
+	->	template(Name, SubResult, NodeXml, TUseRef),
+		useref_or(SUseRef, (TUseRef, UseRef))
+	;	NodeXml=[element(Name, Attrib2, SubResult)],
+		UseRef=SUseRef
+	).
 
-apply_node(Vars, insert_text(Type, Formula), [Result]) :-
+apply_node(Vars, proc(Code), NodeXml, UseRef) :-
+	process(Code, Vars, NodeXml, UseRef).
+
+apply_node(Vars, insert_text(Type, Formula), [Result], false) :-
 	expect(templates:evaln(Vars, Formula, Data),
 		'Bad formula':Formula),
 	to_atom(Data, Type, Result).
 
-apply_node(Vars, insert_xml(Formula), Result) :-
+apply_node(Vars, insert_xml(Formula), Result, false) :-
 	evaln(Vars, Formula, Result).
 
-apply_node(_,_,_) :-
+apply_node(_,_,_,false) :-
 	%writeln('Failed to apply node'),
 	%writeln(Node),
 	%print_term(Node, []),
@@ -222,43 +230,44 @@ apply_attr(Vars, Key=Value, Key2=Value2) :-
 	apply_text_field(Vars, Key, Key2),
 	apply_text_field(Vars, Value, Value2).
 apply_text_field(Vars, [A|Tail], Result) :-
-	maplist(apply_node(Vars), [A|Tail], List),
+	maplist(apply_node(Vars), [A|Tail], List, _),
 	flatten(List, Flat),
 	atomic_list_concat(Flat, Result).
 apply_text_field(Vars, A, Result) :-
-	apply_node(Vars, A, [Result]).
+	apply_node(Vars, A, [Result], _).
 
 attrib_get(Key, [Key=Value|_], Value) :- !.
 attrib_get(Key, [_|Other], Value) :- attrib_get(Key, Other, Value).
 
-process(foreach(ListName, Key, Index, Content), Vars, NodeXml) :-
+process(foreach(ListName, Key, Index, Content), Vars, NodeXml, UseRef) :-
 	evaln(Vars, ListName, List),
 	indeces(List, Indeces),
-	maplist(process_foreach(Vars, (Key, Index), Content), List, Indeces, NestedResult),
+	maplist(process_foreach(Vars, (Key, Index), Content), List, Indeces, NestedResult, UseRefs),
+	useref_flatten(UseRefs, UseRef),
 	flatten(NestedResult, NodeXml).
 
-process(match(Formula, Content), Vars, NodeXml) :-
+process(match(Formula, Content), Vars, NodeXml, UseRef) :-
 	evaln(Vars, Formula, Match),
-	process_match(Vars, Match, Content, [], NodeXml).
-process(when(Formula, Content), Vars, NodeXml) :-
+	process_match(Vars, Match, Content, [], NodeXml, UseRef).
+process(when(Formula, Content), Vars, NodeXml, UseRef) :-
 	evaln(Vars, Formula, R),
 	(	R=true
-	->	apply_template(Vars, Content, [], NodeXml)
-	;	NodeXml = []).
-process(Other, _, _) :- err(Other, 'Bad processor').
+	->	apply_template(Vars, Content, [], NodeXml, (false, UseRef))
+	;	NodeXml = [], UseRef=false).
+process(Other, _, _, false) :- err(Other, 'Bad processor').
 
-process_foreach(Vars, (Key, IndexName), Content, Item, Index, Result) :-
+process_foreach(Vars, (Key, IndexName), Content, Item, Index, Result, UseRef) :-
 	put_assoc(Key, Vars, Item, Vars2),
 	put_assoc(IndexName, Vars2, Index, Vars3),
-	apply_template(Vars3, Content, [], Result).
+	apply_template(Vars3, Content, [], Result, (false, UseRef)).
 
-process_match(_,_,[],Result,Result).
-process_match(Vars, Match,[E|Tail],Xml,Result) :-
+process_match(_,_,[],Result,Result, false).
+process_match(Vars, Match,[E|Tail],Xml,Result, UseRef) :-
 	(	E = element(Match, _, Content)
-	->	apply_template(Vars, Content, [], SubResult),
+	->	apply_template(Vars, Content, [], SubResult, (false, UseRef)),
 		append(Xml, SubResult, Xml2)
 	;	Xml2=Xml),
-	process_match(Vars, Match, Tail, Xml2, Result).
+	process_match(Vars, Match, Tail, Xml2, Result, UseRef).
 
 evaln(_, quote(A), A).
 evaln(_, N, N) :- number(N).
@@ -330,3 +339,30 @@ indeces_([], _, []).
 indeces_([_|Tail], C, [C|ITail]) :- 
 	Cp1 is C+1,
 	indeces_(Tail, Cp1, ITail).
+
+useref_or(true, (_, true)).
+useref_or(false, (Old, Old)).
+useref_flatten(List, UseRef) :-
+	(	maplist('='(false), List)
+	->	UseRef=false
+	;	UseRef=true).
+
+apply_referal(element('nng:refer', [name=Name], _), SubResult) :-
+	(	snippet_defined(Name, Path, Content)
+	->	snippet_referal((Name, Path, Content), SubResult)
+	;	format(atom(Message), 'ERROR: Undefined snippet: ~w', [Name]),
+		writeln(Message),
+		SubResult=element(dif, [class='block-snippet referer'], [Message])
+	).
+
+apply_referal(element(N, A, C), element(N, A, C2)) :-
+	maplist(apply_referal, C, C2).
+
+apply_referal(Other, Other).
+
+snippet_referal((Name, Path, Content), NodeXml) :-
+	format(atom(Link), '~w#~w', [Path, Name]),
+	append(Content, 
+		[element(br, [], []), element(a, [href=Link], ['Quoted Snippet'])],
+		SubResult),
+	NodeXml=element(div, [class='block-snippet referer'], SubResult).
