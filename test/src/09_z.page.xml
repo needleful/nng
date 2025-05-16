@@ -1,0 +1,16 @@
+<page xmlns:nng='https://needleful.net/xml/nng-schema'>
+
+And now for a message from our sponsor:
+
+<nng:refer name='09-snippet-A'/>
+
+And for a word from ourselves:
+
+<nng:snippet name='09-snippet-Z'>
+I am going to **EXPLODE** and **DESTROY AN ENTIRE NEIGHBORHOOD!!!**
+
+It's a good thing, actually.
+</nng:snippet>
+
+Thanks.
+</page>

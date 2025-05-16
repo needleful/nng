@@ -1,0 +1,19 @@
+<page xmlns:nng='https://needleful.net/xml/nng-schema'>
+
+And now for a message from our sponsor:
+
+<nng:refer name='09-snippet-Z'/>
+
+
+And for a word from ourselves:
+
+<nng:snippet name='09-snippet-A'>
+Make sure to drink water!
+- It's good for you.
+- It makes you feel better.
+- It makes you sing better.
+Pretty cool, if you ask me.
+</nng:snippet>
+
+Thanks.
+</page>
