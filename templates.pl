@@ -2,8 +2,8 @@
 	template/4,
 	template_defined/3,
 	snippet_defined/3,
-	generate_page/3,
-	get_snippets/2
+	generate_page/5,
+	get_snippets/3
 	]).
 
 :- use_module(library(assoc)).
@@ -15,18 +15,21 @@
 
 :- dynamic(template_defined/3).
 :- dynamic(snippet_defined/3).
+:- dynamic(file_info/2).
 
 template(Name, InXML, OutXML, UseRef) :-
 	template_defined(Name, ParamAssoc, Code),
 	validate_inputs(ParamAssoc, InXML, Vars),
 	apply_template(Vars, Code, [], OutXML, (false, UseRef)), !.
 
-generate_page([InXML], OutXML, UseRef) :-
+generate_page(SFile, OFile, [InXML], OutXML, UseRef) :-
+	retractall(file_info(_,_)),
+	assert(file_info(SFile, OFile)),
 	empty_assoc(Empty),
 	apply_node(Empty, InXML, OutXML, UseRef), !.
 
-get_snippets(InXML, OutXML) :- 
-	maplist(apply_referal, InXML, OutXML).
+get_snippets(Path, InXML, OutXML) :- 
+	maplist(apply_referal(Path), InXML, OutXML).
 
 validate_inputs(ParamAssoc, XML, InAssoc) :-
 	empty_assoc(Defined),
@@ -180,7 +183,9 @@ apply_node(Vars, element('nng:snippet', Attrib, Content), NodeXml, UseRef) :-
 		'Expected name in nng:snippet attributes':Attrib2),
 	expect(\+ templates:snippet_defined(Name, _, _),
 		'Duplicate snippet defined':Name),
-	assertz(snippet_defined(Name, '/path/to/snippet', SubResult)),
+	expect(templates:file_info(_, Path),
+		'BUG: no output path for snippet':Name),
+	assertz(snippet_defined(Name, Path, SubResult)),
 	NodeXml=[element(div, [id=Name, class='block-snippet'], SubResult)].
 
 apply_node(Vars, element('nng:refer', Attrib, _), NodeXml, UseRef) :-
@@ -188,7 +193,8 @@ apply_node(Vars, element('nng:refer', Attrib, _), NodeXml, UseRef) :-
 	expect(templates:attrib_get(name, Attrib2, Name),
 		'Expected name in nng:refer attributes':Attrib2),
 	(	snippet_defined(Name, Path, Content)
-	->	snippet_referal((Name, Path, Content), Ref),
+	->	file_info(_, OFile),
+		snippet_referal(OFile, (Name, Path, Content), Ref),
 		NodeXml=[Ref],
 		UseRef=false
 	;	NodeXml=[element('nng:refer', [name=Name], [])],
@@ -347,21 +353,22 @@ useref_flatten(List, UseRef) :-
 	->	UseRef=false
 	;	UseRef=true).
 
-apply_referal(element('nng:refer', [name=Name], _), SubResult) :-
+apply_referal(OutPath, element('nng:refer', [name=Name], _), SubResult) :-
 	(	snippet_defined(Name, Path, Content)
-	->	snippet_referal((Name, Path, Content), SubResult)
+	->	snippet_referal(OutPath, (Name, Path, Content), SubResult)
 	;	format(atom(Message), 'ERROR: Undefined snippet: ~w', [Name]),
 		writeln(Message),
 		SubResult=element(dif, [class='block-snippet referer'], [Message])
 	).
 
-apply_referal(element(N, A, C), element(N, A, C2)) :-
-	maplist(apply_referal, C, C2).
+apply_referal(OutPath, element(N, A, C), element(N, A, C2)) :-
+	maplist(apply_referal(OutPath), C, C2).
 
-apply_referal(Other, Other).
+apply_referal(_, Other, Other).
 
-snippet_referal((Name, Path, Content), NodeXml) :-
-	format(atom(Link), '~w#~w', [Path, Name]),
+snippet_referal(OutPath, (Name, Path, Content), NodeXml) :-
+	relative_file_name(Path, OutPath, RelPath),
+	format(atom(Link), '~w#~w', [RelPath, Name]),
 	append(Content, 
 		[element(br, [], []), element(a, [href=Link], ['Quoted Snippet'])],
 		SubResult),

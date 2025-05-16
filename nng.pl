@@ -75,7 +75,7 @@ gen_file(SFile, OFile, Ref) :-
 			'File does not exist':SFile),
 		access_file(OFile, write),
 		load_xml(SFile, SourceXml, [space(sgml)]),
-		generate_page(SourceXml, OutHtml, HasRef)
+		generate_page(SFile, OFile, SourceXml, OutHtml, HasRef)
 	;	err(SFile, 'Failed to process file'),
 		HasRef=false
 	), !,
@@ -105,5 +105,5 @@ finish_referals([Ref|Others]) :-
 	finish_referals(Others).
 
 apply_referal((XML, Output)) :-
-	get_snippets(XML, OutHtml),
+	get_snippets(Output, XML, OutHtml),
 	html_out(OutHtml, Output).

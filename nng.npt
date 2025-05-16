@@ -68,6 +68,12 @@ m3
 		- Collect referals and apply them all in bulk
 			p0
 			i29
+	- Do I need the namespaces?
+		p0
+		i31
+		- Should I always allow them? Make them optional? I don't know, exactly.
+			p0
+			i33
 - Spacing
 	p0
 	i23
