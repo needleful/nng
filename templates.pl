@@ -26,7 +26,8 @@ generate_page(SFile, OFile, [InXML], OutXML, UseRef) :-
 	retractall(file_info(_,_)),
 	assert(file_info(SFile, OFile)),
 	empty_assoc(Empty),
-	apply_node(Empty, InXML, OutXML, UseRef), !.
+	apply_node(Empty, InXML, XML1, UseRef),
+	maplist(find_snippets(OFile), XML1, OutXML).
 
 get_snippets(Path, InXML, OutXML) :- 
 	maplist(apply_referal(Path), InXML, OutXML).
@@ -133,7 +134,6 @@ bad_html(E):-
 	writeln(E),
 	fail.
 
-
 html_atom_convert(A, A) :- atom(A), !.
 html_atom_convert(S, A) :- string(S), atom_string(A, S), !.
 html_atom_convert(S, _) :-
@@ -175,18 +175,6 @@ apply_template(Vars, [A|Tail], Xml, Result, (U, UseRef)) :-
 		apply_template(Vars, Tail, Xml2, Result, (U2, UseRef)).
 
 apply_node(_, A, [A], false) :- atom(A).
-
-apply_node(Vars, element('nng:snippet', Attrib, Content), NodeXml, UseRef) :-
-	apply_template(Vars, Content, [], SubResult, (false, UseRef)),
-	apply_attribs(Vars, Attrib, Attrib2),
-	expect(templates:attrib_get(name, Attrib2, Name),
-		'Expected name in nng:snippet attributes':Attrib2),
-	expect(\+ templates:snippet_defined(Name, _, _),
-		'Duplicate snippet defined':Name),
-	expect(templates:file_info(_, Path),
-		'BUG: no output path for snippet':Name),
-	assertz(snippet_defined(Name, Path, SubResult)),
-	NodeXml=[element(div, [id=Name, class='block-snippet'], SubResult)].
 
 apply_node(Vars, element('nng:refer', Attrib, _), NodeXml, UseRef) :-
 	apply_attribs(Vars, Attrib, Attrib2),
@@ -352,6 +340,20 @@ useref_flatten(List, UseRef) :-
 	(	maplist('='(false), List)
 	->	UseRef=false
 	;	UseRef=true).
+
+find_snippets(OutPath, element('nng:snippet', Attrib, Content), NodeXml) :-
+	maplist(find_snippets(OutPath), Content, SubResult),
+	expect(templates:attrib_get(name, Attrib, Name),
+		'Expected name in nng:snippet attributes':Attrib),
+	expect(\+ templates:snippet_defined(Name, _, _),
+		'Duplicate snippet defined':Name),
+	assertz(snippet_defined(Name, OutPath, SubResult)),
+	writeln(Name=SubResult),
+	NodeXml=element(div, [id=Name, class='block-snippet'], SubResult).
+find_snippets(OutPath, element(N, A, C), element(N, A, C2)) :-
+	maplist(find_snippets(OutPath), C, C2).
+find_snippets(_, Other, Other).
+
 
 apply_referal(OutPath, element('nng:refer', [name=Name], _), SubResult) :-
 	(	snippet_defined(Name, Path, Content)
